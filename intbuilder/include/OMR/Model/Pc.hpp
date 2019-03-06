@@ -14,8 +14,13 @@ namespace Model {
 
 class RealPc {
 public:
-	RealPc(JB::IlValue* pcAddr, JB::IlValue* fpAddr)
-		: _pc(pcAddr), _fp(fpAddr) {}
+	RealPc() : _pc(), _fp() {}
+
+	/// Set up the function pointer.
+	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* fpAddr, RUIntPtr fn) {
+		_pc.initialize(b, pcAddr, fn);
+		_fp.initialize(b, fpAddr, fn);
+	}
 
 	RUInt immediateUInt(JB::IlBuilder* b, RUInt offset) {
 		return RUInt::pack(read<unsigned int>(b, offset.unpack()));
@@ -44,13 +49,6 @@ public:
 	RUIntPtr function(JB::IlBuilder* b) { return _fp.load(b); }
 
 	RUIntPtr load(JB::IlBuilder* b) { return _pc.load(b); }
-
-	/// Set up the function pointer.
-	void initialize(JB::IlBuilder* b, RUIntPtr fn) {
-		
-		_pc.initialize(b, fn);
-		_fp.initialize(b, fn);
-	}
 
 private:
 	template <typename T>

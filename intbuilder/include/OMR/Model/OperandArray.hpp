@@ -14,22 +14,25 @@ namespace Model {
 
 class RealOperandArray {
 public:
-	RealOperandArray(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* addr, RUInt length)
-		: _type(type),
-		  _ptype(b->typeDictionary()->PointerTo(_type)),
-		  _length(length.unpack()) {}
+	RealOperandArray() :
+		_type(nullptr), _ptype(nullptr), _addr(nullptr), _length(nullptr) {}
 
-	void set(JB::IlBuilder* b, RUInt index, JB::IlValue* value) {
+	void set(JB::IlBuilder* b, RSize index, JB::IlValue* value) {
 		b->StoreAt(b->IndexAt(_ptype, _addr, index.unpack()), value);
 	}
 
-	JB::IlValue* get(JB::IlBuilder* b, RUInt index) {
+	JB::IlValue* get(JB::IlBuilder* b, RSize index) {
 		return b->LoadAt(_ptype, b->IndexAt(_type, _addr, index.unpack()));
 	}
 
-	RUInt length() const { return RUInt::pack(_length); }
+	RSize length() const { return RSize::pack(_length); }
 
-	void initialize() {}
+	void initialize(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* addr, RSize length) {
+		_type = type;
+		_ptype = b->typeDictionary()->PointerTo(type);
+		_addr = addr;
+		_length = length.unpack();
+	}
 
 	void commit(JB::IlBuilder* b) {}
 
@@ -44,11 +47,8 @@ private:
 
 class VirtOperandArray {
 public:
-	VirtOperandArray(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* addr, CUInt length)
-		: _type(type),
-		  _ptype(b->typeDictionary()->PointerTo(_type)),
-		  _addr(addr),
-		  _values(length.unpack(), nullptr) {}
+	VirtOperandArray() :
+		_type(nullptr), _ptype(nullptr), _addr(nullptr), _values() {}
 
 	void set(JB::IlBuilder* b, CUInt index, JB::IlValue* value) {
 		_values.at(index.unpack()) = value;
@@ -60,7 +60,12 @@ public:
 
 	CUInt length() const { return CUInt::pack(_values.size()); }
 
-	void initialize(JB::IlBuilder* b) {}
+	void initialize(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* addr, CUInt length) {
+		_type = type;
+		_ptype = b->typeDictionary()->PointerTo(_type);
+		_addr = addr;
+		_values.assign(length.unpack(), nullptr);
+	}
 
 	void commit(JB::IlBuilder* b) {
 		for (std::size_t i = 0; i < _values.size(); ++i) {

@@ -1,13 +1,16 @@
 #if !defined(OMR_BYTEBUFFER_HPP_)
 #define OMR_BYTEBUFFER_HPP_
 
+#include <cstdint>
+#include <cstddef>
+
 namespace OMR {
 
 class ByteBuffer {
 public:
 	/// disown the byte array.
 	std::uint8_t* release() {
-		std::uint8_t data = _data;
+		std::uint8_t* data = _data;
 		_data = nullptr;
 		_capacity = 0;
 		_size = 0;
@@ -38,11 +41,12 @@ public:
 			clear();
 			return true;
 		}
-		_data = realloc(_data, capacity);
+		_data = (std::uint8_t*)realloc(_data, capacity);
 		if (_data != nullptr) {
 			_capacity = capacity;
-			rc = true;
+			return true;
 		}
+		return false;
 	}
 
 	template <typename T>
@@ -50,27 +54,46 @@ public:
 		if (!reserve(_size + sizeof(T))) {
 			return false;
 		}
+		memcpy(end() - 1, (void*)&value, sizeof(T));
 		_size += sizeof(T);
+		return true;
 	}
 
-	bool concat(const ByteStream& tail) {}
+	// bool concat(const ByteStream& tail) {}
 
-	bool concat(void* data, std::size_t sz) {
-		if (!reserve(_size + sz)) {
-			return false;
-		}
-		memcpy(_data, )
-	}
+	// bool concat(void* data, std::size_t sz) {
+	// 	if (!reserve(_size + sz)) {
+	// 		return false;
+	// 	}
+	// 	memcpy(_data, )
+	// }
 
-	template <typename T = >
-	bool
+	std::uint8_t* start() { return _data; }
+
+	std::uint8_t* end() { return _data + _size; }
+
+	const std::uint8_t* start() const { return _data; }
+
+	const std::uint8_t* end() const { return _data + _size; }
 
 private:
-	std::uint8_t* _data;
-	std::size_t _size;
-	std::Size_t _capacity;
+	std::uint8_t* _data = nullptr;
+	std::size_t _size = 0;
+	std::size_t _capacity = 0;
 };
+
+template <typename T>
+ByteBuffer& operator<<(ByteBuffer& buffer, const T& value) {
+	buffer.emit(value);
+	return buffer;
+}
 
 }  // namespace OMR
 
 #endif // OMR_BYTEBUFFER_HPP_
+
+//// XXXXXXXXXXXXXXXzzzzzzzzzzzzzzzzz|
+//// |--------------|----------------|
+//// | start        |                |
+////                | end            |
+////                                 | capacity

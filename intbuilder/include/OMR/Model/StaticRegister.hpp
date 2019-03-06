@@ -19,9 +19,13 @@ class StaticRegister;
 template <typename T>
 class StaticRegister<Mode::REAL, T> {
 public:
-	StaticRegister(JB::IlValue* address)
-		: _address(address),
-		  _value(nullptr) {}
+	StaticRegister() : _address(nullptr), _value(nullptr) {}
+
+	void initialize(JB::IlBuilder* b, JB::IlValue* address, RValue<T> value) {
+		_address = address;
+		_value = value.unpack();
+		store(b, value);
+	}
 
 	RValue<T> load(OMR_UNUSED JB::IlBuilder* b) const {
 		return RValue<T>::pack(_value);
@@ -31,8 +35,6 @@ public:
 		_value = value.unpack();
 		b->StoreAt(_address, _value);
 	}
-
-	void initialize(JB::IlBuilder* b, RValue<T> value) { store(b, value); }
 
 	void commit(JB::IlBuilder* b) {}
 

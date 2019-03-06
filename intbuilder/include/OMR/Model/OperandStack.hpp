@@ -131,11 +131,10 @@ public:
 ///
 class RealOperandStack {
 public:
-	RealOperandStack(JB::IlBuilder* b, JB::IlValue* address)
-		: _sp(b->Address, address) {}
+	RealOperandStack() : _sp() {}
 
-	void initialize(JB::IlBuilder* b) {
-		_sp.initialize(b);
+	void initialize(JB::IlBuilder* b, JB::IlType* elemtype, JB::IlValue* address) {
+		_sp.initialize(b, b->typeDictionary()->PointerTo(elemtype), address);
 	}
 
 	void commit(JB::IlBuilder* b) {
@@ -151,7 +150,7 @@ public:
 	}
 
 	JB::IlValue* popInt(JB::IlBuilder* b) {
-		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, sizeof(int)));
+		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, 1));
 		JB::IlValue* value = b->LoadAt(b->Int32, sp);
 		b->StoreAt(sp, constant(b, std::int32_t(0xdead))); // poison
 		_sp.store(b, sp);
@@ -161,7 +160,14 @@ public:
 	void pushInt(JB::IlBuilder* b, JB::IlValue* value) {
 		JB::IlValue* sp = _sp.load(b);
 		b->StoreAt(sp, value);
-		_sp.store(b, b->Add(sp, constant(b, sizeof(int))));
+		_sp.store(b, b->Add(sp, constant(b, 1)));
+	}
+
+	/// reserve n elements on the stack. Returns a pointer to the zeroth element.
+	JB::IlValue* reserve(JB::IlBuilder* b, RSize nelements) {
+		JB::IlValue* start = _sp.load(b);
+		_sp.store(b, b->Add(start, nelements.unpack()));
+		return start;
 	}
 
 private:

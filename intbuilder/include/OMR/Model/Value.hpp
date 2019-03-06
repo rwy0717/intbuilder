@@ -24,6 +24,13 @@ struct Constant {
 };
 
 template <>
+struct Constant<unsigned int> {
+	JB::IlValue* operator()(JB::IlBuilder* b, unsigned long value) const {
+		return b->Const(static_cast<std::int32_t>(value));
+	}
+};
+
+template <>
 struct Constant<long> {
 	JB::IlValue* operator()(JB::IlBuilder* b, unsigned long value) const {
 		return b->Const(static_cast<std::int64_t>(value));
@@ -63,6 +70,8 @@ public:
 	///
 	static Value<Mode::REAL, T> pack(JB::IlValue* value) { return Value<Mode::REAL, T>(value); }
 
+	Value() = default;
+
 	/// Construct as a const.
 	///
 	Value(JB::IlBuilder* b, T value) : _value(constant(b, value)) {}
@@ -89,6 +98,8 @@ public:
 	/// Construct from internal representation.
 	///
 	static Value<Mode::VIRT, T> pack(T value) { return Value<Mode::VIRT, T>(value); }
+
+	Value() = default;
 
 	/// Construct a compile-time constant value.
 	///

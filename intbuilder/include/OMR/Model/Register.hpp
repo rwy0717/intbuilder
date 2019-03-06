@@ -16,14 +16,17 @@ namespace Model {
 /// The real register directly reads and writes.
 class RealRegister {
 public:
-	RealRegister(JB::IlType* type, JB::IlValue* address)
-		: _type(type), _address(address) {}
+	RealRegister() : _type(nullptr), _address(nullptr) {}
 
 	JB::IlValue* load(JB::IlBuilder* b) { return b->LoadAt(_type, _address); }
 
 	void store(JB::IlBuilder* b, JB::IlValue* value) { b->StoreAt(_address, value); }
 
-	void initialize(JB::IlBuilder* b) {}
+	void initialize(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* address) {
+		_type = type;
+		_address = address;
+		// no initial load.
+	}
 
 	void commit(JB::IlBuilder* b) {}
 
@@ -38,14 +41,17 @@ private:
 
 class VirtRegister {
 public:
-	VirtRegister(JB::IlType* type, JB::IlValue* address)
-		: _type(type), _address(address), _value(nullptr) {}
+	VirtRegister() : _type(nullptr), _address(nullptr), _value(nullptr) {}
 
 	JB::IlValue* load(JB::IlBuilder* b) { return _value; }
 
 	void store(JB::IlBuilder* b, JB::IlValue* value) { _value = value; }
 
-	void initialize(JB::IlBuilder* b) { _value = b->LoadAt(_type, _address); }
+	void initialize(JB::IlBuilder* b, JB::IlType* type, JB::IlValue* address) {
+		_type = type;
+		_address = address;
+		_value = b->LoadAt(_type, _address);
+	}
 
 	void commit(JB::IlBuilder* b) { b->StoreAt(_address, _value); }
 

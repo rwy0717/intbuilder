@@ -39,5 +39,8 @@ template <> struct RemoveUnsigned<unsigned long> : TypeAlias<std::int64_t> {};
 
 #define OMR_UNUSED __attribute__((unused))
 
+#define OMR_STRINGIFY_NOEXPAND(x) #x
+#define OMR_STRINGIFY(x) OMR_STRINGIFY_NOEXPAND(x)
+#define OMR_LINE_STR OMR_STRINGIFY(__LINE__)
 
 #endif // OMR_MODEL_HPP_
