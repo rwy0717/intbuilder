@@ -101,6 +101,10 @@ public:
 	}
 
 	void next(JB::IlBuilder* b, CUInt offset) {
+		assert(0);
+		// npc = _pc.unpack() + offset.unpack();
+		// bb = getbuilder(npc);
+
 		_pc.store(b, CUIntPtr::pack(_pc.unpack() + offset.unpack()));
 		// todo: dispatch to next bytecode builder?
 	}

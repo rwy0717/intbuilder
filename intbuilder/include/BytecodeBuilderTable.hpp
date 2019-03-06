@@ -21,7 +21,7 @@ public:
 		bool found = search.second;
 		if (found) {
 			assert(iter->second == nullptr);
-			iter->second = new BytecodeBuilder(mb);
+			iter->second = mb->OrphanBytecodeBuilder(index, strdup("unknown-bytecode"));
 		}
 		assert(iter->second != nullptr);
 		return iter->second;
