@@ -43,4 +43,6 @@ template <> struct RemoveUnsigned<unsigned long> : TypeAlias<std::int64_t> {};
 #define OMR_STRINGIFY(x) OMR_STRINGIFY_NOEXPAND(x)
 #define OMR_LINE_STR OMR_STRINGIFY(__LINE__)
 
+#define OMR_TRACE() fprintf(stderr, "@@@ trace: %s\n", __PRETTY_FUNCTION__)
+
 #endif // OMR_MODEL_HPP_

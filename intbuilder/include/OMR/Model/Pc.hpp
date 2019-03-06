@@ -8,6 +8,8 @@
 #include <OMR/TypeTraits.hpp>
 #include <IlBuilder.hpp>
 #include <IlType.hpp>
+#include <BytecodeBuilderTable.hpp>
+#include <MethodBuilder.hpp>
 
 namespace OMR {
 namespace Model {
@@ -42,6 +44,14 @@ public:
 		_pc.store(b, RUIntPtr::pack(b->Add(_pc.unpack(), offset.unpack())));
 	}
 
+	void halt(JB::MethodBuilder* b) {
+		b->Return();
+	}
+
+	void halt(JB::MethodBuilder* b, JB::IlValue* result) {
+		b->Return(result);
+	}
+
 	RUIntPtr offset(JB::IlBuilder* b) {
 		return RUIntPtr::pack(b->Sub(_pc.unpack(), _fp.unpack()));
 	}
@@ -50,6 +60,10 @@ public:
 
 	RUIntPtr load(JB::IlBuilder* b) { return _pc.load(b); }
 
+	void commit(JB::IlBuilder* b) {}
+
+	void reload(JB::IlBuilder* b) {}
+
 private:
 	template <typename T>
 	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
@@ -57,6 +71,8 @@ private:
 					b->IndexAt(b->Int8, _pc.unpack(), offset));
 	}
 
+	JB::IlType* _type;
+	JB::IlType* _ptype;
 	RealStaticRegister<std::uintptr_t> _pc;
 	RealStaticRegister<std::uintptr_t> _fp;
 };
@@ -109,6 +125,9 @@ public:
 
 	void reload(JB::IlBuilder* b) {}
 
+	JB::BytecodeBuilderTable* bytecodeBuilders() { return &_bytecodeBuilders; }
+
+
 private:
 	template <typename T>
 	T read(std::size_t offset = 0) {
@@ -117,6 +136,9 @@ private:
 
 	VirtStaticRegister<std::uintptr_t> _pc; // program counter
 	VirtStaticRegister<std::uintptr_t> _fp; // function pointer
+
+	JB::BytecodeBuilder* _currentBytecodeBuilder;
+	JB::BytecodeBuilderTable _bytecodeBuilders;
 };
 
 template <Mode M> struct ModalPcAlias;

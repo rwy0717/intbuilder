@@ -51,22 +51,13 @@ public:
 
 	template <typename T>
 	bool emit(const T& value) {
-		if (!reserve(_size + sizeof(T))) {
+		if (!grow(_size + sizeof(T))) {
 			return false;
 		}
 		memcpy(end() - 1, (void*)&value, sizeof(T));
 		_size += sizeof(T);
 		return true;
 	}
-
-	// bool concat(const ByteStream& tail) {}
-
-	// bool concat(void* data, std::size_t sz) {
-	// 	if (!reserve(_size + sz)) {
-	// 		return false;
-	// 	}
-	// 	memcpy(_data, )
-	// }
 
 	std::uint8_t* start() { return _data; }
 
@@ -77,6 +68,14 @@ public:
 	const std::uint8_t* end() const { return _data + _size; }
 
 private:
+	bool grow(std::size_t mincapa) {
+		std::size_t newcapa = _capacity != 0 ? _capacity : 128;
+		while (newcapa < mincapa) {
+			newcapa *= 2;
+		}
+		return reserve(newcapa);
+	}
+
 	std::uint8_t* _data = nullptr;
 	std::size_t _size = 0;
 	std::size_t _capacity = 0;

@@ -22,7 +22,10 @@ public:
 	StaticRegister() : _address(nullptr), _value(nullptr) {}
 
 	void initialize(JB::IlBuilder* b, JB::IlValue* address, RValue<T> value) {
+		JB::TypeDictionary* t = b->typeDictionary();
 		_address = address;
+		_type = t->toIlType<T>();
+		_ptype = t->PointerTo(_type);
 		_value = value.unpack();
 		store(b, value);
 	}
@@ -45,6 +48,8 @@ public:
 
 private:
 	JB::IlValue* _address;
+	JB::IlType* _type;
+	JB::IlType* _ptype;
 	JB::IlValue* _value;
 };
 
