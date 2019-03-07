@@ -54,7 +54,15 @@ public:
 		if (!grow(_size + sizeof(T))) {
 			return false;
 		}
-		memcpy(end() - 1, (void*)&value, sizeof(T));
+		memcpy(end(), (void*)&value, sizeof(T));
+
+#if 0
+		fprintf(stderr, "emit: nbytes=%zu\n", sizeof(T));
+		for (std::size_t i = 0; i < sizeof(T); ++i) {
+			fprintf(stderr, " emit: [%zu:%p]=%hhu\n", i, end() + i, end()[i]);
+		}
+#endif //
+
 		_size += sizeof(T);
 		return true;
 	}
@@ -90,9 +98,3 @@ ByteBuffer& operator<<(ByteBuffer& buffer, const T& value) {
 }  // namespace OMR
 
 #endif // OMR_BYTEBUFFER_HPP_
-
-//// XXXXXXXXXXXXXXXzzzzzzzzzzzzzzzzz|
-//// |--------------|----------------|
-//// | start        |                |
-////                | end            |
-////                                 | capacity

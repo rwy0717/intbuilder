@@ -8,6 +8,7 @@
 #include <OMR/Model/OperandArray.hpp>
 #include <OMR/Model/Register.hpp>
 #include <OMR/Model/Pc.hpp>
+#include <OMR/Model/Builder.hpp>
 
 #include <VirtualMachineState.hpp>
 #include <TypeDictionary.hpp>
@@ -22,8 +23,11 @@ namespace Model = OMR::Model;
 namespace JB = OMR::JitBuilder;
 
 enum class Op : std::uint8_t {
-	HALT, NOP, PUSH_CONST, ADD, PUSH_LOCAL, POP_LOCAL, CALL
+	HALT, NOP, PUSH_CONST, ADD, PUSH_LOCAL, POP_LOCAL, CALL,
+	LAST = CALL
 };
+
+constexpr std::size_t OPCOUNT = std::size_t(Op::LAST);
 
 class Interpreter;
 
@@ -112,9 +116,9 @@ public:
 			t->PointerTo(t->LookupStruct("Func"))
 		);
 
-		// b->DefineFunction("print_string", "", "", (void *)&print_string, t->NoType, 1,
-		// 	t->PointerTo(t->Int8)
-		// );
+		b->DefineFunction("print_string", "", "", (void *)&print_string, t->NoType, 1,
+			t->PointerTo(t->Int8)
+		);
 	}
 
 private:
@@ -125,7 +129,7 @@ private:
 	
 	///
 	static void print_string(const char* str) {
-		fprintf(stderr, "%s", str);
+		fprintf(stderr, "%s\n", str);
 	}
 };
 
@@ -281,6 +285,12 @@ private:
 	Machine() {}
 };
 
+void gentrace(JB::IlBuilder* b, const char* str) {
+	b->Call("print_string", 1, b->Const((void*)str));
+}
+
+#define GENTRACE(b) gentrace(b, __PRETTY_FUNCTION__)
+
 template <Model::Mode M>
 struct FunctionEntryBuilder {
 	static constexpr std::size_t LOCAL_SIZE = 4;
@@ -317,6 +327,7 @@ struct HaltBuilder {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
+		GENTRACE(b);
 		machine.pc.halt(b);
 	}
 };
@@ -326,6 +337,7 @@ struct NopBuilder {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
 	void build(Machine<M> machine, JB::IlBuilder* b) {
+		GENTRACE(b);
 		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
 	}
 };
@@ -414,6 +426,14 @@ struct InstructionDispatch<Model::Mode::VIRT> {
 };
 
 template <Model::Mode M>
+struct DefaultBuilder {
+	void build(Machine<M> machine, JB::IlBuilder* b) {
+		GENTRACE(b);
+		b->Return();
+	}
+};
+
+template <Model::Mode M>
 struct InstructionSet {
 	template <typename Instruction>
 	void buildInstruction(Instruction& instruction, JB::IlBuilder* b) {
@@ -449,6 +469,31 @@ private:
 /// Define all types and structs in jitbuilder
 ///
 
+// struct CaseEntry {
+// 	std::vector<std::int32_t> value;
+// 	std::
+// };
+
+// struct CaseTable {
+// public:
+// 	CaseTable(std::size_t size = 0) {}
+
+// 	build(JB::IlBuilder* b, std::string local) {
+
+// 	}
+
+// 	set(std::int32_t value, JB::IlBuilder* handler, bool fallthrough = false) {
+
+// 	}
+
+// 	// at(std::int32_t i)
+
+// private:
+// 	std::vector<std::int32_t> values;
+// 	std::vector<bool> fallthrough;
+// 	std::vector<JB::IlBuilder*> body;
+// };
+
 class InterpreterBuilder : public JB::MethodBuilder {
 public:
 	InterpreterBuilder(Compiler& compiler) :
@@ -479,8 +524,9 @@ public:
 		Machine<Model::Mode::REAL>::Factory factory;
 		factory.setInterpreter(Load("interpreter"));
 		factory.setFunction(Model::RUIntPtr::pack(Load("target")));
-
 		Machine<Model::Mode::REAL> machine = factory.build(this);
+
+		DefineLocal("opcode", t->Int32);
 
 		AllLocalsHaveBeenDefined();
 
@@ -489,10 +535,70 @@ public:
 
 		Call("jit_trace", 2, Load("interpreter"), Load("target"));
 
+
+		/////////////////////////////////
+
 		InstructionDispatch<Model::Mode::REAL> dispatch;
 		JB::IlValue* target = dispatch.target(this, machine).unpack();
+		Store("opcode", ConvertTo(t->Int32, target));
+	
+		//////////////////////////////////////
 
+		JB::IlBuilder* defaultx = OrphanBuilder();
+		DefaultBuilder<Model::Mode::REAL>().build(machine, defaultx);
+
+		// TR::IlValue *pc = getPC(doWhileBody);
+		// TR::IlValue *increment = doWhileBody->ConstInt32(1);
+		// TR::IlValue *newPC = doWhileBody->Add(pc, increment);
+		// setPC(doWhileBody, newPC);
+
+		std::vector<JB::IlBuilder::JBCase*> cases;
+
+		{
+			IlBuilder* builder = nullptr;
+			cases.push_back(MakeCase(std::int32_t(Op::HALT), &builder, false));
+			HaltBuilder<Model::Mode::REAL>().build(machine, builder);
+		}
+
+		{
+			IlBuilder* builder = nullptr;
+			cases.push_back(MakeCase(std::int32_t(Op::NOP), &builder, false));
+			NopBuilder<Model::Mode::REAL>().build(machine, builder);
+		}
+
+		Switch("opcode", &defaultx, cases.size(), cases.data());
+	
+		GENTRACE(this);
 		Return();
+		// size_t numberOfRegisteredBytecodes = _registeredBytecodes.size();
+		// int32_t *caseValues = (int32_t *) _comp->trMemory()->allocateHeapMemory(numberOfRegisteredBytecodes * sizeof(int32_t));
+		// TR_ASSERT(0 != caseValues, "out of memory");
+
+		// TR::BytecodeBuilder **caseBuilders = (TR::BytecodeBuilder **) _comp->trMemory()->allocateHeapMemory(numberOfRegisteredBytecodes * sizeof(TR::BytecodeBuilder *));
+		// TR_ASSERT(0 != caseBuilders, "out of memory");
+
+
+
+		// std::sort(_registeredBytecodes.begin(), _registeredBytecodes.end(), bytecodeBuilderSort);
+
+		// for (int i = 0; i < OPCOUNT; i++) {
+		// 	TR::BytecodeBuilder *builder = _registeredBytecodes.at(i);
+		// 	caseBuilders[i] = builder;
+		// 	caseValues[i] = builder->bcIndex();
+		// 	caseFallsThrough[i] = false;
+		// }
+
+		// Switch("opcode", doWhileBody, _defaultHandler, numberOfRegisteredBytecodes, caseValues, caseBuilders, caseFallsThrough);
+
+		// _defaultHandler->Call("handleBadOpcode", 2, _defaultHandler->Load(_opcodeName), _defaultHandler->Load(_pcName));
+		// _defaultHandler->Goto(&breakBody);
+
+//    handleInterpreterExit(this);
+
+	// return true;
+			/////////////////////////////////////
+		// 	Switch()
+		// Return();
 
 		return true;
 	}
@@ -513,7 +619,22 @@ InterpretFn buildInterpret() {
 
 /////////////////////////// Instruction Set
 
-Func* mkfunc() {
+Func* MakeHaltOnlyFunction() {
+	OMR::ByteBuffer buffer;
+	buffer << Func();
+	buffer << Op::HALT;
+	return (Func*)buffer.release();
+}
+
+Func* MakeNopThenHaltFunction() {
+	OMR::ByteBuffer buffer;
+	buffer << Func();
+	buffer << Op::NOP;
+	buffer << Op::HALT;
+	return (Func*)buffer.release();
+}
+
+Func* MakeAddConstsFunc() {
 	OMR::ByteBuffer buffer;
 	buffer << Func();
 	buffer << Op::PUSH_CONST << std::int32_t(1);
@@ -527,18 +648,13 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func func;
-	func.cbody = nullptr;
-	func.nlocals = 10;
-	func.nparams = 10;
-
-	Func* target = &func; // mkfunc();
+	Func* target = MakeNopThenHaltFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);
 	fprintf(stderr, "int main: target=%p\n", target);
-	fprintf(stderr, "int main: target startpc=%p\n", &target->body);
-
+	fprintf(stderr, "int main: target startpc=%p\n", &target->body[0]);
+	fprintf(stderr, "int main: initial op=%hhu\n", target->body[0]);
 	interpret(&interpreter, target);
 	// free(target);
 	return 0;

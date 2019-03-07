@@ -44,7 +44,7 @@ public:
 		_pc.store(b, RUIntPtr::pack(b->Add(_pc.unpack(), offset.unpack())));
 	}
 
-	void halt(JB::MethodBuilder* b) {
+	void halt(JB::IlBuilder* b) {
 		b->Return();
 	}
 
