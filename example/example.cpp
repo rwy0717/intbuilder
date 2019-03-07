@@ -111,12 +111,19 @@ public:
 	static void define(JB::MethodBuilder* b) {
 		JB::TypeDictionary* t = b->typeDictionary();
 
-		b->DefineFunction("jit_trace", "1234", "jit_helper", (void *)&jit_trace, t->NoType, 2,
+		b->DefineFunction("jit_trace", "1234", "<jit-helper>", (void *)&jit_trace, t->NoType, 2,
 			t->PointerTo(t->LookupStruct("Interpreter")),
 			t->PointerTo(t->LookupStruct("Func"))
 		);
 
-		b->DefineFunction("print_string", "", "", (void *)&print_string, t->NoType, 1,
+		b->DefineFunction("print_string", "0", "<jit-helper>", (void *)&print_string, t->NoType, 1,
+			t->PointerTo(t->Int8)
+		);
+
+		b->DefineFunction("trace", "<jit-helper>", "0", (void*)&trace, t->NoType, 4,
+			t->PointerTo(t->Int8),
+			t->Int64,
+			t->PointerTo(t->Int8),
 			t->PointerTo(t->Int8)
 		);
 	}
@@ -130,6 +137,10 @@ private:
 	///
 	static void print_string(const char* str) {
 		fprintf(stderr, "%s\n", str);
+	}
+
+	static void trace(const char* file, std::size_t line, const char* function, const char* msg) {
+		fprintf(stderr, "%s:%zu: %s: %s\n", file, line, function, msg);
 	}
 };
 
@@ -204,7 +215,6 @@ public:
 			b->LoadIndirect("Func", "nlocals", _address)
 		);
 	}
-
 
 	Model::RUIntPtr body(JB::IlBuilder* b) {
 		return Model::RUIntPtr::pack(
@@ -285,11 +295,18 @@ private:
 	Machine() {}
 };
 
-void gentrace(JB::IlBuilder* b, const char* str) {
-	b->Call("print_string", 1, b->Const((void*)str));
+void gentrace(JB::IlBuilder* b, const char* file, std::size_t line, const char* func, const char* msg) {
+	b->Call("trace", 4,
+		Model::constant(b, const_cast<char*>(file)),
+		Model::constant(b, line),
+		Model::constant(b, const_cast<char*>(func)),
+		Model::constant(b, const_cast<char*>(msg))
+	);
 }
 
-#define GENTRACE(b) gentrace(b, __PRETTY_FUNCTION__)
+#define GEN_TRACE_MSG(b, msg) gentrace(b, __FILE__, __LINE__, __PRETTY_FUNCTION__, msg)
+
+#define GENTRACE(b) GEN_TRACE_MSG(b, "trace")
 
 template <Model::Mode M>
 struct FunctionEntryBuilder {
