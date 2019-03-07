@@ -56,7 +56,7 @@ using InterpretFn = void(*)(Interpreter*, Func*);
 /// The interpreter state.
 struct Interpreter {
 public:
-	static constexpr std::size_t  STACK_SIZE = 1024; //< in bytes
+	static constexpr std::size_t  STACK_SIZE = 4*8; //< in bytes
 	static constexpr std::uint8_t POISON     = 0x5e;
 
 	Interpreter() :
@@ -297,10 +297,10 @@ private:
 
 void gentrace(JB::IlBuilder* b, const char* file, std::size_t line, const char* func, const char* msg) {
 	b->Call("trace", 4,
-		Model::constant(b, const_cast<char*>(file)),
+		Model::constant(b, file),
 		Model::constant(b, line),
-		Model::constant(b, const_cast<char*>(func)),
-		Model::constant(b, const_cast<char*>(msg))
+		Model::constant(b, func),
+		Model::constant(b, msg)
 	);
 }
 
@@ -544,6 +544,10 @@ public:
 		Machine<Model::Mode::REAL> machine = factory.build(this);
 
 		DefineLocal("opcode", t->Int32);
+		Store("opcode", Const(std::int32_t(0)));
+	
+		DefineLocal("continue", t->Int32);
+		Store("continue", Const(std::int32_t(1)));
 
 		AllLocalsHaveBeenDefined();
 
@@ -574,18 +578,33 @@ public:
 		{
 			IlBuilder* builder = nullptr;
 			cases.push_back(MakeCase(std::int32_t(Op::HALT), &builder, false));
+			// machine.reload(builder);
 			HaltBuilder<Model::Mode::REAL>().build(machine, builder);
+			machine.commit(builder);
 		}
 
 		{
 			IlBuilder* builder = nullptr;
 			cases.push_back(MakeCase(std::int32_t(Op::NOP), &builder, false));
+			// machine.reload(builder);
 			NopBuilder<Model::Mode::REAL>().build(machine, builder);
+			machine.commit(builder);
 		}
 
-		Switch("opcode", &defaultx, cases.size(), cases.data());
+		JB::IlBuilder* body = OrphanBuilder();
+
+		DoWhileLoop((char*)"continue", &body);
+		
+		body->Switch("opcode", &defaultx, cases.size(), cases.data());
 	
+		{
+			InstructionDispatch<Model::Mode::REAL> dispatch;
+			JB::IlValue* target = dispatch.target(body, machine).unpack();
+			body->Store("opcode", ConvertTo(t->Int32, target));
+		}
+		
 		GENTRACE(this);
+
 		Return();
 		// size_t numberOfRegisteredBytecodes = _registeredBytecodes.size();
 		// int32_t *caseValues = (int32_t *) _comp->trMemory()->allocateHeapMemory(numberOfRegisteredBytecodes * sizeof(int32_t));
@@ -660,6 +679,10 @@ Func* MakeAddConstsFunc() {
 	return (Func*)buffer.release();
 }
 
+void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpret) {
+	interpret(interpreter, target);
+}
+
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
 
@@ -672,7 +695,7 @@ extern "C" int main(int argc, char** argv) {
 	fprintf(stderr, "int main: target=%p\n", target);
 	fprintf(stderr, "int main: target startpc=%p\n", &target->body[0]);
 	fprintf(stderr, "int main: initial op=%hhu\n", target->body[0]);
-	interpret(&interpreter, target);
+	interpret_wrap(&interpreter, target, interpret);
 	// free(target);
 	return 0;
 }

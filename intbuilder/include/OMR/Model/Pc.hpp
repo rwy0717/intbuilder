@@ -60,9 +60,15 @@ public:
 
 	RUIntPtr load(JB::IlBuilder* b) { return _pc.load(b); }
 
-	void commit(JB::IlBuilder* b) {}
+	void commit(JB::IlBuilder* b) {
+		_pc.commit(b);
+		_fp.commit(b);
+	}
 
-	void reload(JB::IlBuilder* b) {}
+	void reload(JB::IlBuilder* b) {
+		_pc.reload(b);
+		_fp.reload(b);
+	}
 
 private:
 	template <typename T>

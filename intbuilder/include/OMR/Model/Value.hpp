@@ -52,6 +52,13 @@ struct Constant<T*> {
 };
 
 template <typename T>
+struct Constant<const T*> {
+	JB::IlValue* operator()(JB::IlBuilder* b, const T* value) const {
+		return Constant<T*>()(b, const_cast<T*>(value));
+	}
+};
+
+template <typename T>
 JB::IlValue* constant(JB::IlBuilder* b, T value) {
 	return Constant<T>()(b, value);
 }
