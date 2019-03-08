@@ -149,7 +149,7 @@ public:
 		_sp.mergeInto(b, dest._sp);
 	}
 
-	JB::IlValue* popInt(JB::IlBuilder* b) {
+	JB::IlValue* popInt64(JB::IlBuilder* b) {
 		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, 1));
 		JB::IlValue* value = b->LoadAt(b->Int32, sp);
 		b->StoreAt(sp, constant(b, std::int32_t(0xdead))); // poison
@@ -157,14 +157,14 @@ public:
 		return value;
 	}
 
-	void pushInt(JB::IlBuilder* b, JB::IlValue* value) {
+	void pushInt64(JB::IlBuilder* b, JB::IlValue* value) {
 		JB::IlValue* sp = _sp.load(b);
 		b->StoreAt(sp, value);
 		_sp.store(b, b->Add(sp, constant(b, 1)));
 	}
 
-	/// reserve n elements on the stack. Returns a pointer to the zeroth element.
-	JB::IlValue* reserve(JB::IlBuilder* b, RSize nelements) {
+	/// reserve n 64bit elements on the stack. Returns a pointer to the zeroth element.
+	JB::IlValue* reserve64(JB::IlBuilder* b, RSize nelements) {
 		JB::IlValue* start = _sp.load(b);
 		_sp.store(b, b->Add(start, nelements.unpack()));
 		return start;

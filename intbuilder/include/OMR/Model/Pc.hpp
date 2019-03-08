@@ -14,34 +14,44 @@
 namespace OMR {
 namespace Model {
 
+/// V
+/// pc
+/// startPc
 class RealPc {
 public:
-	RealPc() : _pc(), _fp() {}
+	RealPc() : _pcReg(), _startPcReg() {}
 
 	/// Set up the function pointer.
-	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* fpAddr, RUIntPtr fn) {
-		_pc.initialize(b, pcAddr, fn);
-		_fp.initialize(b, fpAddr, fn);
+	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* startPcAddr, RPtr<std::uint8_t> value) {
+		_pcReg.initialize(b, pcAddr, value);
+		_startPcReg.initialize(b, startPcAddr, value);
 	}
 
-	RUInt immediateUInt(JB::IlBuilder* b, RUInt offset) {
-		return RUInt::pack(read<unsigned int>(b, offset.unpack()));
+	RUInt64 immediateUInt64(JB::IlBuilder* b, RSize offset) {
+		return RUInt64::pack(read<std::uint64_t>(b, offset.unpack()));
 	}
 
-	RUInt immediateUInt(JB::IlBuilder* b) {
-		return immediateUInt(b, RUInt(b, 0));
+	RUInt64 immediateUInt64(JB::IlBuilder* b) {
+		return immediateUInt64(b, RSize(b, 0));
 	}
 
-	RInt immediateInt(JB::IlBuilder* b, RUInt offset) {
-		return RInt::pack(read<int>(b, offset.unpack()));
+	RInt64 immediateInt64(JB::IlBuilder* b, RSize offset) {
+		return RInt64::pack(read<std::int64_t>(b, offset.unpack()));
 	}
 
-	RInt immediateInt(JB::IlBuilder* b) {
-		return immediateInt(b, RUInt(b, 0));
+	RInt64 immediateInt64(JB::IlBuilder* b) {
+		return immediateInt64(b, RSize(b, 0));
 	}
 
-	void next(JB::IlBuilder* b, RUInt offset) {
-		_pc.store(b, RUIntPtr::pack(b->Add(_pc.unpack(), offset.unpack())));
+	/// @group Inter-bytecode Control Flow
+	/// @{
+
+	void next(JB::IlBuilder* b, RSize offset) {
+		_pcReg.store(b, RPtr<std::uint8_t>::pack(
+			b->Add(
+				_pcReg.unpack(),
+				offset.unpack()
+		)));
 	}
 
 	void halt(JB::IlBuilder* b) {
@@ -52,43 +62,57 @@ public:
 		b->Return(result);
 	}
 
+	/// @}
+	///
+
+	/// @group State Queries
+	/// @{
+
 	RUIntPtr offset(JB::IlBuilder* b) {
-		return RUIntPtr::pack(b->Sub(_pc.unpack(), _fp.unpack()));
+		return RUIntPtr::pack(
+			b->Sub(
+				_pcReg.unpack(),
+				_startPcReg.unpack()
+		));
 	}
 
-	RUIntPtr function(JB::IlBuilder* b) { return _fp.load(b); }
+	RPtr<std::uint8_t> start(JB::IlBuilder* b) { return _startPcReg.load(b); }
 
-	RUIntPtr load(JB::IlBuilder* b) { return _pc.load(b); }
+	RPtr<std::uint8_t> load(JB::IlBuilder* b) { return _pcReg.load(b); }
+
+	/// @}
+	///
 
 	void commit(JB::IlBuilder* b) {
-		_pc.commit(b);
-		_fp.commit(b);
+		_pcReg.commit(b);
+		_startPcReg.commit(b);
 	}
 
 	void reload(JB::IlBuilder* b) {
-		_pc.reload(b);
-		_fp.reload(b);
+		_pcReg.reload(b);
+		_startPcReg.reload(b);
 	}
 
 private:
 	template <typename T>
 	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
-		return b->LoadAt(b->typeDictionary()->toIlType<T>(),
-					b->IndexAt(b->Int8, _pc.unpack(), offset));
+		JB::TypeDictionary* t = b->typeDictionary();
+		return b->LoadAt(t->PointerTo(t->toIlType<T>()),
+					b->IndexAt(t->pInt8, _pcReg.unpack(), offset));
 	}
 
-	JB::IlType* _type;
-	JB::IlType* _ptype;
-	RealStaticRegister<std::uintptr_t> _pc;
-	RealStaticRegister<std::uintptr_t> _fp;
+	// JB::IlType* _type;
+	// JB::IlType* _ptype;
+	RealStaticRegister<std::uint8_t*> _pcReg;
+	RealStaticRegister<std::uint8_t*> _startPcReg;
 };
 
 /// In the virtual program counter, the program is treated as a constant.
 /// immediates and program decoding is collapsed to real constant values.
 class VirtPc {
 public:
-	VirtPc(JB::IlValue* pcAddr, JB::IlValue* fpAddr)
-		: _pc(pcAddr), _fp(fpAddr) {}
+	VirtPc(JB::IlValue* pcAddr, JB::IlValue* startPcAddr)
+		: _pcReg(pcAddr), _startPcReg(startPcAddr) {}
 
 	CUInt immediateUInt(JB::IlBuilder* b, CUInt offset) {
 		return CUInt(b, read<unsigned int>(offset.unpack()));
@@ -111,26 +135,27 @@ public:
 		// npc = _pc.unpack() + offset.unpack();
 		// bb = getbuilder(npc);
 
-		_pc.store(b, CUIntPtr::pack(_pc.unpack() + offset.unpack()));
-		// todo: dispatch to next bytecode builder?
+		_pcReg.store(b, CPtr<std::uint8_t>::pack(_pcReg.unpack() + offset.unpack()));
 	}
 
 	CUIntPtr offset(JB::IlBuilder* b) const {
-		return sub(b, _pc.load(b), _fp.load(b));
+		return CUIntPtr::pack(
+			_pcReg.unpack() - _startPcReg.unpack()
+		);
 	}
 
-	CUIntPtr function(JB::IlBuilder* b) { return _fp.load(b); }
+	CPtr<std::uint8_t> start(JB::IlBuilder* b) { return _startPcReg.load(b); }
 
-	CUIntPtr load(JB::IlBuilder* b) { return _pc.load(b); }
+	CPtr<std::uint8_t> load(JB::IlBuilder* b) { return _pcReg.load(b); }
 
-	void initialize(JB::IlBuilder* b, CUIntPtr function) {
-		_pc.initialize(b, function);
-		_fp.initialize(b, function);
+	void initialize(JB::IlBuilder* b, CPtr<std::uint8_t> function) {
+		_pcReg.initialize(b, function);
+		_startPcReg.initialize(b, function);
 	}
 
 	void commit(JB::IlBuilder* b) {
-		_pc.commit(b);
-		_fp.commit(b);
+		_pcReg.commit(b);
+		_startPcReg.commit(b);
 	}
 
 	void reload(JB::IlBuilder* b) {}
@@ -141,11 +166,11 @@ public:
 private:
 	template <typename T>
 	T read(std::size_t offset = 0) {
-		return *reinterpret_cast<T*>(_pc.unpack() + offset);
+		return *reinterpret_cast<T*>(_pcReg.unpack() + offset);
 	}
 
-	VirtStaticRegister<std::uintptr_t> _pc; // program counter
-	VirtStaticRegister<std::uintptr_t> _fp; // function pointer
+	VirtStaticRegister<std::uint8_t*> _pcReg;      // program counter
+	VirtStaticRegister<std::uint8_t*> _startPcReg; // function pointer
 
 	JB::BytecodeBuilder* _currentBytecodeBuilder;
 	JB::BytecodeBuilderTable _bytecodeBuilders;

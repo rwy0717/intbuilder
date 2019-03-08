@@ -23,9 +23,11 @@ public:
 
 	void initialize(JB::IlBuilder* b, JB::IlValue* address, RValue<T> value) {
 		JB::TypeDictionary* t = b->typeDictionary();
-		_address = address;
-		_type = t->toIlType<T>();
-		_ptype = t->PointerTo(_type);
+
+		_vtype = t->toIlType<T>();
+		_ptype = t->PointerTo(_vtype);
+
+		_address = b->ConvertTo(_ptype, address);
 		_value = value.unpack();
 		store(b, value);
 	}
@@ -48,7 +50,7 @@ public:
 
 private:
 	JB::IlValue* _address;
-	JB::IlType* _type;
+	JB::IlType* _vtype;
 	JB::IlType* _ptype;
 	JB::IlValue* _value;
 };

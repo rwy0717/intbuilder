@@ -62,6 +62,7 @@ public:
 	Interpreter() :
 		_sp(nullptr), _pc(nullptr), _fp(nullptr), _interpret(nullptr) {
 		memset(_stack, POISON, STACK_SIZE);
+		initialize();
 	}
 
 	void run(Func* target) {
@@ -80,6 +81,10 @@ public:
 // private:
 	friend struct JitHelpers;
 	friend void defineInterpreter(JB::TypeDictionary*);
+
+	void initialize() {
+		_sp = _stack;
+	}
 
 	std::uint8_t* _sp;                //< Stack pointer. Pointer to top of stack.
 	std::uint8_t* _pc;                //< Program counter. Pointer to current bytecode.
@@ -169,9 +174,9 @@ public:
 		return Model::CSize::pack(_function->nparams);
 	}
 
-	Model::CUIntPtr body(OMR_UNUSED JB::IlBuilder* b) {
-		return Model::CUIntPtr::pack(
-			reinterpret_cast<std::uintptr_t>(&_function->body)
+	Model::CPtr<std::uint8_t> body(OMR_UNUSED JB::IlBuilder* b) {
+		return Model::CPtr<std::uint8_t>::pack(
+			_function->body
 		);
 	}
 
@@ -216,8 +221,8 @@ public:
 		);
 	}
 
-	Model::RUIntPtr body(JB::IlBuilder* b) {
-		return Model::RUIntPtr::pack(
+	Model::RPtr<std::uint8_t> body(JB::IlBuilder* b) {
+		return Model::RPtr<std::uint8_t>::pack(
 			b->StructFieldInstanceAddress("Func", "body", _address)
 		);
 	}
@@ -253,17 +258,17 @@ public:
 			JB::IlValue* pcAddr      = b->StructFieldInstanceAddress("Interpreter", "_pc",      _interpreter);
 			JB::IlValue* spAddr      = b->StructFieldInstanceAddress("Interpreter", "_sp",      _interpreter);
 			JB::IlValue* fpAddr      = b->StructFieldInstanceAddress("Interpreter", "_fp",      _interpreter);
-			JB::IlValue* startpcAddr = b->StructFieldInstanceAddress("Interpreter", "_startpc", _interpreter);
+			JB::IlValue* startPcAddr = b->StructFieldInstanceAddress("Interpreter", "_startpc", _interpreter);
 
 			machine.function.initialize(b, _function);
-			machine.stack.initialize(b, t->Int64, spAddr);
+			machine.stack.initialize(b, t->Int32, spAddr);
 
 			Model::Size<M> nlocals    = machine.function.nlocals(b);
-			JB::IlValue*   localsAddr = machine.stack.reserve(b, nlocals);
+			JB::IlValue*   localsAddr = machine.stack.reserve64(b, nlocals);
 
 			machine.locals.initialize(b, t->Int64, localsAddr, nlocals);
 
-			machine.pc.initialize(b, pcAddr, startpcAddr, machine.function.body(b));
+			machine.pc.initialize(b, pcAddr, startPcAddr, machine.function.body(b));
 
 			return machine;
 		}
@@ -312,7 +317,7 @@ template <Model::Mode M>
 struct FunctionEntryBuilder {
 	static constexpr std::size_t LOCAL_SIZE = 4;
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
-		machine.stack.reserve(b, mul(b, machine.pc.function().nlocals(), LOCAL_SIZE));
+		machine.stack.reserve64(b, mul(b, machine.pc.function().nlocals(), LOCAL_SIZE));
 	}
 };
 
@@ -328,14 +333,14 @@ struct CallBuilder;
 template <>
 struct CallBuilder<Model::Mode::VIRT> : CallBuilderBase {
 	void build(Machine<Model::Mode::VIRT>& machine, JB::IlBuilder* b) {
-		machine.pc.next(b, Model::CUInt(b, INSTR_SIZE));
+		// TODO! machine.pc.next(b, Model::CSize(b, INSTR_SIZE));
 	}
 };
 
 template <>
 struct CallBuilder<Model::Mode::REAL> : CallBuilderBase {
 	void build(Machine<Model::Mode::REAL>& machine, JB::IlBuilder* b) {
-		machine.pc.next(b, Model::RUInt(b, INSTR_SIZE));
+		machine.pc.next(b, Model::RSize(b, INSTR_SIZE));
 	}
 };
 
@@ -355,7 +360,7 @@ struct NopBuilder {
 
 	void build(Machine<M> machine, JB::IlBuilder* b) {
 		GENTRACE(b);
-		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
+		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -365,9 +370,12 @@ struct PushConstBuilder {
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
-		Model::UInt<M> c = machine.pc.immediateInt(b, Model::UInt<M>(b, INSTR_CONST_OFFSET));
-		machine.stack.push(b, c.toIl(b));
-		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
+		GENTRACE(b);
+		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
+		GENTRACE(b);
+		machine.stack.pushInt64(b, c.toIl(b));
+		GENTRACE(b);
+		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -378,8 +386,8 @@ struct AddBuilder {
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		JB::IlValue* rhs = machine.stack.popInt(b);
 		JB::IlValue* lhs = machine.stack.popInt(b);
-		machine.stack.push(b, b->Add(lhs, rhs));
-		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
+		machine.stack.pushInt64(b, b->Add(lhs, rhs));
+		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -389,10 +397,11 @@ struct PushLocalBuilder {
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
-		Model::UInt<M> index = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
+		GENTRACE(b);
+		Model::UInt64<M> index = machine.pc.immediateUInt64(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
 		JB::IlValue* value = machine.locals.at(b, index);
-		machine.stack.push(b, value);
-		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
+		machine.stack.pushInt64(b, value);
+		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -404,7 +413,7 @@ struct PopLocalBuilder {
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		Model::UInt<M> index = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
 		machine.locals.set(b, index, machine.stack.popUInt(b));
-		machine.pc.next(b, Model::UInt<M>(b, INSTR_SIZE));
+		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -417,7 +426,7 @@ struct BranchBuilder {
 		Model::UInt<M> target = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_TARGET_OFFSET));
 		JB::IlValue* value = machine.locals.at(b, index);
 		machine.stack.push(b, value);
-		machine.pc.next(b, Model::add(b, Model::UInt<M>(b, INSTR_SIZE), target));
+		machine.pc.next(b, Model::add(b, Model::Size<M>(b, INSTR_SIZE), target));
 	}
 };
 
@@ -591,6 +600,14 @@ public:
 			machine.commit(builder);
 		}
 
+		{
+			IlBuilder* builder = nullptr;
+			cases.push_back(MakeCase(std::int32_t(Op::PUSH_CONST), &builder, false));
+			// machine.reload(builder);
+			PushConstBuilder<Model::Mode::REAL>().build(machine, builder);
+			machine.commit(builder);
+		}
+
 		JB::IlBuilder* body = OrphanBuilder();
 
 		DoWhileLoop((char*)"continue", &body);
@@ -670,7 +687,15 @@ Func* MakeNopThenHaltFunction() {
 	return (Func*)buffer.release();
 }
 
-Func* MakeAddConstsFunc() {
+Func* MakePushConstFunction() {
+	OMR::ByteBuffer buffer;
+	buffer << Func();
+	buffer << Op::PUSH_CONST << std::int32_t(42);
+	buffer << Op::HALT;
+	return (Func*)buffer.release();
+}
+
+Func* MakeAddConstsFunction() {
 	OMR::ByteBuffer buffer;
 	buffer << Func();
 	buffer << Op::PUSH_CONST << std::int32_t(1);
@@ -688,7 +713,7 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func* target = MakeNopThenHaltFunction();
+	Func* target = MakePushConstFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);
@@ -696,6 +721,10 @@ extern "C" int main(int argc, char** argv) {
 	fprintf(stderr, "int main: target startpc=%p\n", &target->body[0]);
 	fprintf(stderr, "int main: initial op=%hhu\n", target->body[0]);
 	interpret_wrap(&interpreter, target, interpret);
+
+	fprintf(stderr, "int main: stack[0]=%llu\n", 
+		*reinterpret_cast<std::int64_t*>(&interpreter._stack[0]));
+
 	// free(target);
 	return 0;
 }

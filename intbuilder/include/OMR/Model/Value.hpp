@@ -128,13 +128,22 @@ private:
 
 /// @group Modal value types.
 /// @{
+
 template <Mode M, typename T> using Ptr = Value<M, T*>;
 template <Mode M> using Int = Value<M, int>;
 template <Mode M> using UInt = Value<M, unsigned int>;
 template <Mode M> using UIntPtr = Value<M, std::uintptr_t>;
 template <Mode M> using Size = Value<M, std::size_t>;
 template <Mode M> using Int8 = Value<M, std::int8_t>;
-template <Mode M> using int16 = Value<M, std::int16_t>;
+template <Mode M> using Int16 = Value<M, std::int16_t>;
+template <Mode M> using Int32 = Value<M, std::int32_t>;
+template <Mode M> using Int64 = Value<M, std::int64_t>;
+template <Mode M> using UInt8 = Value<M, std::uint8_t>;
+template <Mode M> using UInt16 = Value<M, std::uint16_t>;
+template <Mode M> using UInt32 = Value<M, std::uint32_t>;
+template <Mode M> using UInt64 = Value<M, std::uint64_t>;
+template <Mode M> using PtrDiff = Value<M, std::ptrdiff_t>;
+
 /// @}
 ///
 
@@ -145,6 +154,7 @@ using RValue = Value<Mode::REAL, T>;
 
 /// @group Collection of runtime value types.
 /// @{
+
 template <typename T> using RPtr = RValue<T*>;
 using RInt = RValue<int>;
 using RUInt = RValue<unsigned int>;
@@ -160,6 +170,8 @@ using RUInt32 = RValue<std::uint32_t>;
 using RUInt64 = RValue<std::uint64_t>;
 using RFloat = RValue<float>;
 using RDouble = RValue<double>;
+using RPtrDiff = RValue<std::ptrdiff_t>;
+
 /// @}
 ///
 
@@ -170,6 +182,7 @@ using CValue = Value<Mode::VIRT, T>;
 
 /// @group Collection of compile-time value types.
 /// @{
+
 template <typename T> using CPtr = CValue<T*>;
 using CInt = CValue<int>;
 using CUInt = CValue<unsigned int>;
@@ -186,6 +199,8 @@ using CUInt32 = CValue<std::uint32_t>;
 using CUInt64 = CValue<std::uint64_t>;
 using CFloat = CValue<float>;
 using CDouble = CValue<double>;
+using CPtrDiff = CValue<std::ptrdiff_t>;
+
 /// @}
 ///
 
@@ -218,6 +233,13 @@ template <typename T>
 struct Sub<Mode::REAL, T> {
 	RValue<T> operator()(JB::IlBuilder* b, RValue<T> lhs, RValue<T> rhs) {
 		return RValue<T>::pack(b->Sub(lhs.unpack(), rhs.unpack()));
+	}
+};
+
+template <typename T>
+struct Sub<Mode::REAL, T*> {
+	RValue<std::ptrdiff_t> operator()(JB::IlBuilder* b, RValue<T> lhs, RValue<T> rhs) {
+		return RValue<std::ptrdiff_t>::pack(b->Sub(lhs.unpack(), rhs.unpack()));
 	}
 };
 
