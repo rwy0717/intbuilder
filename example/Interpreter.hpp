@@ -58,9 +58,11 @@ public:
 		_interpret(this, target);
 	}
 
-	std::int64_t peek(std::size_t offset = 0) {
-		return reinterpret_cast<std::int64_t*>(_stack)[offset];
+	std::int64_t peek(std::size_t offset = 0) const {
+		return reinterpret_cast<const std::int64_t*>(_stack)[offset];
 	}
+
+	const std::uint8_t* sp() const { return _sp; }
 
 private:
 	friend class JitHelpers;

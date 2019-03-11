@@ -335,13 +335,19 @@ struct NopBuilder {
 
 template <Model::Mode M>
 struct PushConstBuilder {
-	static constexpr std::size_t INSTR_SIZE = 5;
+	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		GEN_TRACE_MSG(b, "PUSH_CONST");
 		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
+
+		b->Call("print_s", 1, b->Const((void*)"PushConstBuilder: build: value="));
+		b->Call("print_u", 1, c.toIl(b));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
 		machine.stack.pushInt64(b, c.toIl(b));
+
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
@@ -616,7 +622,7 @@ Func* MakeTwoNopsThenHaltFunction() {
 Func* MakePushConstFunction() {
 	OMR::ByteBuffer buffer;
 	buffer << Func();
-	buffer << Op::PUSH_CONST << std::int32_t(42);
+	buffer << Op::PUSH_CONST << std::int64_t(42);
 	buffer << Op::HALT;
 	return (Func*)buffer.release();
 }
@@ -624,8 +630,8 @@ Func* MakePushConstFunction() {
 Func* MakePushTwoConstsFunction() {
 	OMR::ByteBuffer buffer;
 	buffer << Func();
-	buffer << Op::PUSH_CONST << std::int32_t(333);
-	buffer << Op::PUSH_CONST << std::int32_t(444);
+	buffer << Op::PUSH_CONST << std::int64_t(333);
+	buffer << Op::PUSH_CONST << std::int64_t(444);
 	buffer << Op::HALT;
 	return (Func*)buffer.release();
 }
@@ -633,8 +639,8 @@ Func* MakePushTwoConstsFunction() {
 Func* MakeAddConstsFunction() {
 	OMR::ByteBuffer buffer;
 	buffer << Func();
-	buffer << Op::PUSH_CONST << std::int32_t(333);
-	buffer << Op::PUSH_CONST << std::int32_t(444);
+	buffer << Op::PUSH_CONST << std::int64_t(333);
+	buffer << Op::PUSH_CONST << std::int64_t(444);
 	buffer << Op::ADD;
 	buffer << Op::HALT;
 	return (Func*)buffer.release();
@@ -649,14 +655,14 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func* target = MakePushTwoConstsFunction();
+	Func* target = MakeAddConstsFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);
 	fprintf(stderr, "int main: target=%p\n", target);
 	fprintf(stderr, "int main: target startpc=%p\n", &target->body[0]);
 	fprintf(stderr, "int main: initial op=%hhu\n", target->body[0]);
-
+	fprintf(stderr, "int main: initial sp=%p\n", interpreter.sp());
 	interpret_wrap(&interpreter, target, interpret);
 
 	fprintf(stderr, "int main: stack[0]=%llu\n", interpreter.peek(0));

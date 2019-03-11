@@ -159,6 +159,13 @@ public:
 		JB::IlValue* value = b->LoadAt(_typedict->pInt64, sp);
 		b->StoreAt(sp, constant(b, std::int64_t(0xdead))); // poison
 		_sp.store(b, sp);
+
+		b->Call("print_s", 1, b->Const((void*)"RealOperandStack: popInt64: value="));
+		b->Call("print_u", 1, value);
+		b->Call("print_s", 1, b->Const((void*)" new-sp="));
+		b->Call("print_x", 1, _sp.load(b));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+	
 		return value;
 	}
 
@@ -169,6 +176,12 @@ public:
 			b->ConvertTo(_ptype,
 				b->Add(sp, constant(b, 8))
 		));
+
+		b->Call("print_s", 1, b->Const((void*)"RealOperandStack: pushInt64: value="));
+		b->Call("print_u", 1, value);
+		b->Call("print_s", 1, b->Const((void*)" new-sp="));
+		b->Call("print_x", 1, _sp.load(b));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
 	}
 
 	/// reserve n 64bit elements on the stack. Returns a pointer to the zeroth element.

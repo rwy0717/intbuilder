@@ -15,8 +15,11 @@ void JitHelpers::interp_run(Interpreter* interpreter, Func* target) {
 
 /// Print a mini trace statement.
 void JitHelpers::interp_trace(Interpreter* interpreter, Func* func) {
-	fprintf(stderr, "$$$ interpreter=%p func=%p pc=%p=%hhu\n",
-		interpreter, func, interpreter->_pc, *interpreter->_pc);
+	fprintf(stderr, "$$$ interpreter=%p func=%p pc=%p=%hhu sp=%p sp[-1]=%llu\n",
+		interpreter, func,
+		interpreter->_pc, *interpreter->_pc,
+		interpreter->_sp, reinterpret_cast<std::uint64_t*>(interpreter->_sp)[-1]
+	);
 }
 
 /// Print a debug string with line information

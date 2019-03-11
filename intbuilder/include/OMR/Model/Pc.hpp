@@ -124,8 +124,21 @@ private:
 	template <typename T>
 	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
 		JB::TypeDictionary* t = b->typeDictionary();
-		return b->LoadAt(t->PointerTo(t->toIlType<T>()),
-					b->IndexAt(t->pInt8, _pcReg.unpack(), offset));
+
+		JB::IlValue* addr = b->IndexAt(t->pInt8, _pcReg.unpack(), offset);
+		JB::IlValue* value = b->LoadAt(t->PointerTo(t->toIlType<T>()), addr);
+
+		b->Call("print_s", 1, b->Const((void*)"PC READ: pc="));
+		b->Call("print_x", 1, _pcReg.unpack());
+		b->Call("print_s", 1, b->Const((void*)" offset="));
+		b->Call("print_x", 1, offset);
+		b->Call("print_s", 1, b->Const((void*)" addr="));
+		b->Call("print_x", 1, addr);
+		b->Call("print_s", 1, b->Const((void*)" val="));
+		b->Call("print_u", 1, value);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		return value;
 	}
 
 	// JB::IlType* _type;
