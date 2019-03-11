@@ -146,10 +146,10 @@ public:
 			JB::IlValue* startPcAddr = b->StructFieldInstanceAddress("Interpreter", "_startpc", _interpreter);
 
 			machine.function.initialize(b, _function);
-			machine.stack.initialize(b, t->Int32, spAddr);
+			machine.stack.initialize(b, t->Int64, spAddr);
 
 			Model::Size<M> nlocals    = machine.function.nlocals(b);
-			JB::IlValue*   localsAddr = machine.stack.reserve64(b, nlocals);
+			// JB::IlValue*   localsAddr = machine.stack.reserve64(b, nlocals);
 
 			// machine.locals.initialize(b, t->Int64, localsAddr, nlocals);
 
@@ -342,7 +342,7 @@ struct PushConstBuilder {
 		GEN_TRACE_MSG(b, "PUSH_CONST");
 		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
 		machine.stack.pushInt64(b, c.toIl(b));
-		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -355,7 +355,7 @@ struct AddBuilder {
 		JB::IlValue* rhs = machine.stack.popInt64(b);
 		JB::IlValue* lhs = machine.stack.popInt64(b);
 		machine.stack.pushInt64(b, b->Add(lhs, rhs));
-		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -369,7 +369,7 @@ struct PushLocalBuilder {
 		Model::UInt64<M> index = machine.pc.immediateUInt64(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
 		JB::IlValue* value = machine.locals.at(b, index);
 		machine.stack.pushInt64(b, value);
-		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -382,7 +382,7 @@ struct PopLocalBuilder {
 		GEN_TRACE(b);
 		Model::UInt<M> index = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
 		machine.locals.set(b, index, machine.stack.popUInt(b));
-		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -395,7 +395,7 @@ struct BranchBuilder {
 		Model::UInt<M> target = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_TARGET_OFFSET));
 		JB::IlValue* value = machine.locals.at(b, index);
 		machine.stack.push(b, value);
-		machine.pc.next(b, Model::add(b, Model::Size<M>(b, INSTR_SIZE), target));
+		// machine.pc.next(b, Model::add(b, Model::Size<M>(b, INSTR_SIZE), target));
 	}
 };
 
@@ -404,7 +404,6 @@ struct DefaultHandler {
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		GEN_TRACE_MSG(b, "DEFAULT");
 		halt(b, machine);
-
 	}
 };
 
@@ -535,25 +534,23 @@ public:
 			clone.reload(builder);
 			NopBuilder<Model::Mode::REAL>().build(clone, builder);
 			clone.commit(builder);
-
-
 		}
 
-		// { //////////// PUSH_CONST
-		// 	IlBuilder* builder = nullptr;
-		// 	cases.push_back(MakeCase(std::int32_t(Op::PUSH_CONST), &builder, false));
-		// 	// machine.reload(builder);
-		// 	PushConstBuilder<Model::Mode::REAL>().build(machine, builder);
-		// 	machine.commit(builder);
-		// }
+		{ //////////// PUSH_CONST
+			IlBuilder* builder = nullptr;
+			cases.push_back(MakeCase(std::int32_t(Op::PUSH_CONST), &builder, false));
+			Machine<Model::Mode::REAL> clone = machine;
+			clone.reload(builder);
+			PushConstBuilder<Model::Mode::REAL>().build(clone, builder);
+		}
 
-		// { //////////// ADD
-		// 	IlBuilder* builder = nullptr;
-		// 	cases.push_back(MakeCase(std::int32_t(Op::ADD), &builder, false));
-		// 	// machine.reload(builder);
-		// 	AddBuilder<Model::Mode::REAL>().build(machine, builder);
-		// 	machine.commit(builder);
-		// }
+		{ //////////// ADD
+			IlBuilder* builder = nullptr;
+			cases.push_back(MakeCase(std::int32_t(Op::ADD), &builder, false));
+			Machine<Model::Mode::REAL> clone = machine;
+			clone.reload(builder);
+			AddBuilder<Model::Mode::REAL>().build(clone, builder);
+		}
 	
 		//////////////////////////////////////
 
@@ -652,7 +649,7 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func* target = MakeTwoNopsThenHaltFunction();
+	Func* target = MakePushTwoConstsFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);

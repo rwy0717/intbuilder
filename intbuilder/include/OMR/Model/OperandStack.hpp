@@ -157,7 +157,7 @@ public:
 	JB::IlValue* popInt64(JB::IlBuilder* b) {
 		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, 8));
 		JB::IlValue* value = b->LoadAt(_typedict->pInt64, sp);
-		b->StoreAt(sp, constant(b, std::int32_t(0xdead))); // poison
+		b->StoreAt(sp, constant(b, std::int64_t(0xdead))); // poison
 		_sp.store(b, sp);
 		return value;
 	}

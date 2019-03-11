@@ -30,13 +30,13 @@ private:
 	static void print_s(const char* s);
 
 	/// print "%d"
-	static void print_d(int d);
+	static void print_d(std::intptr_t d);
 
 	/// print "%x"
-	static void print_x(unsigned int x);
+	static void print_x(std::uintptr_t x);
 
 	/// print "%u"
-	static void print_u(unsigned int u);
+	static void print_u(std::uintptr_t u);
 };
 
 #endif // JITHELPERS_HPP_
