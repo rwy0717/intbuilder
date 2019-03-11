@@ -216,6 +216,56 @@ private:
 	Machine() {}
 };
 
+using RealMachine = Machine<Model::Mode::REAL>;
+using VirtMachine = Machine<Model::Mode::VIRT>;
+
+template <Model::Mode M>
+struct InstructionDispatch;
+
+template <>
+struct InstructionDispatch<Model::Mode::REAL> {
+	Model::RUIntPtr target(JB::IlBuilder* b, Machine<Model::Mode::REAL>& machine) {
+		return Model::RUIntPtr::pack(
+			b->LoadAt(b->typeDictionary()->pInt8, machine.pc.load(b).unpack()));
+	}
+};
+
+template <>
+struct InstructionDispatch<Model::Mode::VIRT> {
+	Model::CUIntPtr target(JB::IlBuilder* b, Model::CUIntPtr pc) {
+		// translate pc to bytecode index.
+		return Model::CUIntPtr::pack(
+			static_cast<std::uintptr_t>(
+				*reinterpret_cast<std::uint8_t*>(pc.unpack())));
+	}
+};
+
+void next(JB::IlBuilder* b, RealMachine& machine, Model::RSize offset) {
+
+	JB::TypeDictionary* t = b->typeDictionary();
+
+	machine.pc.next(b, offset);
+
+	InstructionDispatch<Model::Mode::REAL> dispatch;
+	JB::IlValue* target = dispatch.target(b, machine).unpack();
+	JB::IlValue* target32 = b->ConvertTo(t->Int32, target);
+
+	b->Call("print_s", 1, b->Const((char*)"NEXT: next-bc="));
+	b->Call("print_x", 1, target);
+	b->Call("print_s", 1, b->Const((void*)"\nNEXT: dispatch: converted-next-bc="));
+	b->Call("print_x", 1, target32);
+	b->Call("print_s", 1, b->Const((void*)"\n"));
+
+	b->Store("opcode", target32);
+	machine.commit(b);
+}
+
+void halt(JB::IlBuilder* b, RealMachine& machine) {
+	b->Call("print_s", 1, b->Const((void*)"HALT\n"));
+	machine.commit(b);
+	b->Return();
+}
+
 void gen_dbg_msg(JB::IlBuilder* b, const char* file, std::size_t line, const char* func, const char* msg) {
 	b->Call("dbg_msg", 4,
 		Model::constant(b, file),
@@ -269,7 +319,7 @@ struct HaltBuilder {
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		GEN_TRACE_MSG(b, "HALT");
-		machine.pc.halt(b);
+		halt(b, machine);
 	}
 };
 
@@ -279,7 +329,7 @@ struct NopBuilder {
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		GEN_TRACE_MSG(b, "NOP");
-		machine.pc.next(b, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
@@ -350,31 +400,11 @@ struct BranchBuilder {
 };
 
 template <Model::Mode M>
-struct InstructionDispatch;
-
-template <>
-struct InstructionDispatch<Model::Mode::REAL> {
-	Model::RUIntPtr target(JB::IlBuilder* b, Machine<Model::Mode::REAL>& machine) {
-		return Model::RUIntPtr::pack(
-			b->LoadAt(b->typeDictionary()->pInt8, machine.pc.load(b).unpack()));
-	}
-};
-
-template <>
-struct InstructionDispatch<Model::Mode::VIRT> {
-	Model::CUIntPtr target(JB::IlBuilder* b, Model::CUIntPtr pc) {
-		// translate pc to bytecode index.
-		return Model::CUIntPtr::pack(
-			static_cast<std::uintptr_t>(
-				*reinterpret_cast<std::uint8_t*>(pc.unpack())));
-	}
-};
-
-template <Model::Mode M>
 struct DefaultHandler {
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
 		GEN_TRACE_MSG(b, "DEFAULT");
-		b->Return();
+		halt(b, machine);
+
 	}
 };
 
@@ -505,17 +535,7 @@ public:
 			clone.reload(builder);
 			NopBuilder<Model::Mode::REAL>().build(clone, builder);
 			clone.commit(builder);
-			{
-				InstructionDispatch<Model::Mode::REAL> dispatch;
-				JB::IlValue* target = dispatch.target(builder, clone).unpack();
-				JB::IlValue* target32 = builder->ConvertTo(t->Int32, target);
-				builder->Call("print_s", 1, builder->Const((char*)"NOP: dispatch: next-bc="));
-				builder->Call("print_x", 1, target);
-				builder->Call("print_s", 1, builder->Const((void*)"\nNOP: dispatch: converted-next-bc="));
-				builder->Call("print_x", 1, target32);
-				builder->Call("print_s", 1, builder->Const((void*)"\n"));
-				builder->Store("opcode", target32);
-			}
+
 
 		}
 

@@ -63,7 +63,6 @@ public:
 				_pcReg.unpack(),
 				offset.unpack()
 		)));
-
 		b->Call("print_s", 1, b->Const((void*)"Pc updated: value="));
 		b->Call("print_u", 1, _pcReg.unpack());
 		b->Call("print_s", 1, b->Const((void*)"\n"));
