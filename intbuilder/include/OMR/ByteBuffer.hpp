@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 namespace OMR {
 
@@ -31,7 +33,7 @@ public:
 	void clear() {
 		_capacity = 0;
 		if (_data != nullptr) {
-			free(_data);
+			std::free(_data);
 			_data = nullptr;
 		}
 	}
@@ -41,7 +43,7 @@ public:
 			clear();
 			return true;
 		}
-		_data = (std::uint8_t*)realloc(_data, capacity);
+		_data = (std::uint8_t*)std::realloc(_data, capacity);
 		if (_data != nullptr) {
 			_capacity = capacity;
 			return true;
@@ -54,7 +56,7 @@ public:
 		if (!grow(_size + sizeof(T))) {
 			return false;
 		}
-		memcpy(end(), (void*)&value, sizeof(T));
+		std::memcpy(end(), (void*)&value, sizeof(T));
 
 #if 0
 		fprintf(stderr, "emit: nbytes=%zu\n", sizeof(T));

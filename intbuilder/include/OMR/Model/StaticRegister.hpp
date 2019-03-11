@@ -4,7 +4,6 @@
 #include <OMR/Model.hpp>
 #include <OMR/Model/Mode.hpp>
 
-
 #include <cstdint>
 
 namespace OMR {
@@ -19,8 +18,25 @@ class StaticRegister;
 template <typename T>
 class StaticRegister<Mode::REAL, T> {
 public:
-	StaticRegister() : _address(nullptr), _value(nullptr) {}
+	StaticRegister() :
+		_vtype(nullptr),
+		_ptype(nullptr),
+		_address(nullptr),
+		_value(nullptr) {}
 
+	StaticRegister(const StaticRegister&) = default;
+
+	/*
+	StaticRegister(const StaticRegister& other) :
+		_vtype(other._vtype),
+		_ptype(other._ptype),
+		_address(_address),
+		_value(_value) {}
+	*/
+
+	StaticRegister(StaticRegister&& other) = default;
+
+	/// Static Initialization
 	void initialize(JB::IlBuilder* b, JB::IlValue* address, RValue<T> value) {
 		JB::TypeDictionary* t = b->typeDictionary();
 
@@ -32,26 +48,46 @@ public:
 		store(b, value);
 	}
 
-	RValue<T> load(OMR_UNUSED JB::IlBuilder* b) const {
+	RValue<T> load(OMR_UNUSED JB::IlBuilder* b) {
+		reload(b);
+
+		b->Call("print_s", 1, b->Const((void*)"StaticRegister<REAL>: LOAD value="));
+		b->Call("print_x", 1, _value);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
 		return RValue<T>::pack(_value);
 	};
 
 	void store(JB::IlBuilder* b, RValue<T> value) {
 		_value = value.unpack();
 		b->StoreAt(_address, _value);
+
+		b->Call("print_s", 1, b->Const((void*)"StaticRegister<REAL>: STORE value="));
+		b->Call("print_x", 1, _value);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
 	}
 
-	void commit(JB::IlBuilder* b) {}
+	void commit(JB::IlBuilder* b) {
+		b->StoreAt(_address, _value);
+	}
 
-	void reload(OMR_UNUSED JB::IlBuilder* b) {}
+	void reload(JB::IlBuilder* b) {
+		_value = b->LoadAt(_ptype, _address);
+	}
 
 	/// Convert to internal representation.
 	JB::IlValue* unpack() const { return _value; };
 
+	void mergeInto(JB::IlBuilder* b, StaticRegister<Mode::REAL, T>& other) {
+		assert(_vtype == other._vtype);
+		assert(_ptype == other._ptype);
+		b->StoreOver(_value, other._value);
+	}
+
 private:
-	JB::IlValue* _address;
 	JB::IlType* _vtype;
 	JB::IlType* _ptype;
+	JB::IlValue* _address;
 	JB::IlValue* _value;
 };
 
@@ -59,6 +95,8 @@ template <typename T>
 class StaticRegister<Mode::VIRT, T> {
 public:
 	StaticRegister(JB::IlValue* address) : _address(address) {}
+
+	StaticRegister(const StaticRegister<Mode::VIRT, T>& other) = default;
 
 	CValue<T> load(OMR_UNUSED JB::IlBuilder* b) const {
 		return CValue<T>::pack(_value);

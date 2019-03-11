@@ -21,10 +21,21 @@ class RealPc {
 public:
 	RealPc() : _pcReg(), _startPcReg() {}
 
+	RealPc(const RealPc& other) = default;
+
+	RealPc(RealPc&& other) = default;
+
 	/// Set up the function pointer.
 	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* startPcAddr, RPtr<std::uint8_t> value) {
+		b->Call("print_s", 1, b->Const((void*)"Pc initial value="));
+		b->Call("print_x", 1, value.unpack());
+		b->Call("print_s", 1, b->Const((void*)"\n"));
 		_pcReg.initialize(b, pcAddr, value);
 		_startPcReg.initialize(b, startPcAddr, value);
+
+		b->Call("print_s", 1, b->Const((void*)"Pc value immediately reloaded value="));
+		b->Call("print_x", 1, _pcReg.unpack());
+		b->Call("print_s", 1, b->Const((void*)"\n"));	
 	}
 
 	RUInt64 immediateUInt64(JB::IlBuilder* b, RSize offset) {
@@ -52,6 +63,10 @@ public:
 				_pcReg.unpack(),
 				offset.unpack()
 		)));
+
+		b->Call("print_s", 1, b->Const((void*)"Pc updated: value="));
+		b->Call("print_u", 1, _pcReg.unpack());
+		b->Call("print_s", 1, b->Const((void*)"\n"));
 	}
 
 	void halt(JB::IlBuilder* b) {
@@ -78,7 +93,15 @@ public:
 
 	RPtr<std::uint8_t> start(JB::IlBuilder* b) { return _startPcReg.load(b); }
 
-	RPtr<std::uint8_t> load(JB::IlBuilder* b) { return _pcReg.load(b); }
+	RPtr<std::uint8_t> load(JB::IlBuilder* b) {
+
+		b->Call("print_s", 1, b->Const((void*)"Pc loading: value="));
+		b->Call("print_u", 1, _pcReg.unpack());
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		return _pcReg.load(b);
+
+	}
 
 	/// @}
 	///
@@ -91,6 +114,11 @@ public:
 	void reload(JB::IlBuilder* b) {
 		_pcReg.reload(b);
 		_startPcReg.reload(b);
+	}
+
+	void mergeInto(JB::IlBuilder* b, RealPc& dest) {
+		_pcReg.mergeInto(b, dest._pcReg);
+		_startPcReg.mergeInto(b, dest._startPcReg);
 	}
 
 private:

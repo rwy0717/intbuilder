@@ -133,8 +133,13 @@ class RealOperandStack {
 public:
 	RealOperandStack() : _sp() {}
 
-	void initialize(JB::IlBuilder* b, JB::IlType* elemtype, JB::IlValue* address) {
-		_sp.initialize(b, b->typeDictionary()->PointerTo(elemtype), address);
+	RealOperandStack(const RealOperandStack&) = default;
+
+	void initialize(JB::IlBuilder* b, JB::IlType* etype, JB::IlValue* address) {
+		_typedict = b->typeDictionary();
+		_etype = etype;
+		_ptype = _typedict->PointerTo(_etype);
+		_sp.initialize(b, _ptype, address);
 	}
 
 	void commit(JB::IlBuilder* b) {
@@ -150,8 +155,8 @@ public:
 	}
 
 	JB::IlValue* popInt64(JB::IlBuilder* b) {
-		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, 1));
-		JB::IlValue* value = b->LoadAt(b->Int32, sp);
+		JB::IlValue* sp = b->Sub(_sp.load(b), constant(b, 8));
+		JB::IlValue* value = b->LoadAt(_typedict->pInt64, sp);
 		b->StoreAt(sp, constant(b, std::int32_t(0xdead))); // poison
 		_sp.store(b, sp);
 		return value;
@@ -160,7 +165,10 @@ public:
 	void pushInt64(JB::IlBuilder* b, JB::IlValue* value) {
 		JB::IlValue* sp = _sp.load(b);
 		b->StoreAt(sp, value);
-		_sp.store(b, b->Add(sp, constant(b, 1)));
+		_sp.store(b,
+			b->ConvertTo(_ptype,
+				b->Add(sp, constant(b, 8))
+		));
 	}
 
 	/// reserve n 64bit elements on the stack. Returns a pointer to the zeroth element.
@@ -171,6 +179,9 @@ public:
 	}
 
 private:
+	JB::TypeDictionary* _typedict;
+	JB::IlType* _etype;
+	JB::IlType* _ptype;
 	RealRegister _sp;
 };
 
