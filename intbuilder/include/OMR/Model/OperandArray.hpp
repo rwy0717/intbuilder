@@ -29,7 +29,7 @@ public:
 	}
 
 	JB::IlValue* get(JB::IlBuilder* b, RSize index) {
-		return b->LoadAt(_ptype, b->IndexAt(_type, _addr, index.unpack()));
+		return b->LoadAt(_ptype, b->IndexAt(_ptype, _addr, index.unpack()));
 	}
 
 	RSize length() const { return RSize::pack(_length); }
@@ -37,6 +37,11 @@ public:
 	void commit(JB::IlBuilder* b) {}
 
 	void reload(JB::IlBuilder* b) {}
+
+	void mergeInto(JB::IlBuilder* b, RealOperandArray& dest) {
+		b->StoreOver(dest._addr, _addr);
+		b->StoreOver(dest._length, _length);
+	}
 
 private:
 	JB::IlType* _type;  // element type.

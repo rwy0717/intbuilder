@@ -160,7 +160,7 @@ public:
 		b->StoreAt(sp, constant(b, std::int64_t(0xdead))); // poison
 		_sp.store(b, sp);
 
-		b->Call("print_s", 1, b->Const((void*)"RealOperandStack: popInt64: value="));
+		b->Call("print_s", 1, b->Const((void*)"$$$ RealOperandStack: popInt64: value="));
 		b->Call("print_u", 1, value);
 		b->Call("print_s", 1, b->Const((void*)" new-sp="));
 		b->Call("print_x", 1, _sp.load(b));
@@ -177,7 +177,7 @@ public:
 				b->Add(sp, constant(b, 8))
 		));
 
-		b->Call("print_s", 1, b->Const((void*)"RealOperandStack: pushInt64: value="));
+		b->Call("print_s", 1, b->Const((void*)"$$$ RealOperandStack: pushInt64: value="));
 		b->Call("print_u", 1, value);
 		b->Call("print_s", 1, b->Const((void*)" new-sp="));
 		b->Call("print_x", 1, _sp.load(b));
@@ -187,7 +187,14 @@ public:
 	/// reserve n 64bit elements on the stack. Returns a pointer to the zeroth element.
 	JB::IlValue* reserve64(JB::IlBuilder* b, RSize nelements) {
 		JB::IlValue* start = _sp.load(b);
-		_sp.store(b, b->Add(start, nelements.unpack()));
+		_sp.store(b, b->Add(start, b->Mul(b->ConstInt64(8), nelements.unpack())));
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ RealOperandStack: reserve64: nelements="));
+		b->Call("print_u", 1, nelements.unpack());
+		b->Call("print_s", 1, b->Const((void*)" new-sp="));
+		b->Call("print_x", 1, _sp.load(b));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
 		return start;
 	}
 

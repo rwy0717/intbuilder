@@ -66,6 +66,9 @@ public:
 
 		_spec.genEnterMethod(this);
 
+		/// allocate a clone of the spec's machine.
+		_machine.reset(new MachineT(_spec.machine()));
+
 		JB::IlBuilder* loop = OrphanBuilder();
 		DoWhileLoop((char*)"interpreter_continue", &loop);
 
@@ -94,9 +97,9 @@ public:
 
 	JB::IlBuilder* genDefaultHandler() {
 		JB::IlBuilder* b = OrphanBuilder();
-		MachineT machine = _spec.machine();
-		machine.reload(b);
-		_spec.genDefaultHandler(b, machine);
+		MachineT clone = *_machine;
+		clone.reload(b);
+		_spec.genDefaultHandler(b, clone);
 		return b;
 	}
 
@@ -110,8 +113,11 @@ public:
 
 	const SpecT& spec() const { return _spec; }
 
+	MachineT& machine() { return *_machine; }
+
 private:
 	SpecT _spec;
+	std::unique_ptr<MachineT> _machine = nullptr;
 };
 
 }  // namespace Model

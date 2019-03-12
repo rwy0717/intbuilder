@@ -27,6 +27,11 @@ using CompiledFn = void(*)(Interpreter*);
 
 /// Function header.
 struct Func {
+	Func() = default;
+
+	Func(std::size_t nlocals, std::size_t nparams)
+		: cbody(nullptr), nlocals(nlocals), nparams(nparams) {}
+
 	CompiledFn cbody = nullptr; //< compiled body ptr.
 	std::size_t nlocals = 0;
 	std::size_t nparams = 0;

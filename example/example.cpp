@@ -149,8 +149,8 @@ public:
 			machine->stack.initialize(b, t->Int64, spAddr);
 
 			Model::Size<M> nlocals = machine->function.nlocals(b);
-			// JB::IlValue*   localsAddr = machine.stack.reserve64(b, nlocals);
-			// machine.locals.initialize(b, t->Int64, localsAddr, nlocals);
+			JB::IlValue* localsAddr = machine->stack.reserve64(b, nlocals);
+			machine->locals.initialize(b, t->Int64, localsAddr, nlocals);
 
 			machine->pc.initialize(b, pcAddr, startPcAddr, machine->function.body(b));
 
@@ -169,14 +169,14 @@ public:
 	void commit(JB::IlBuilder* b) {
 		function.commit(b);
 		stack.commit(b);
-		// todo: locals.commit(b);
+		locals.commit(b);
 		pc.commit(b);
 	}
 
 	void mergeInto(JB::IlBuilder* b, Machine<M>& dest) {
 		function.mergeInto(b, dest.function);
 		stack.mergeInto(b, dest.stack);
-		// todo: locals
+		locals.mergeInto(b, dest.locals);
 		pc.mergeInto(b, dest.pc);
 	}
 
@@ -206,7 +206,7 @@ public:
 
 	ModelFunc<M> function;
 	Model::OperandStack<M> stack;
-	// Model::OperandArray<M> locals;
+	Model::OperandArray<M> locals;
 	Model::Pc<M> pc;
 
 private:
@@ -343,38 +343,37 @@ struct GenAdd {
 	}
 };
 
-#if 0 ///////////////////////////
 template <Model::Mode M>
-struct PushLocalBuilder {
-	static constexpr std::size_t INSTR_SIZE = 5;
+struct GenPushLocal {
+	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	void build(Machine<M>& machine, JB::IlBuilder* b) {
-		GEN_TRACE(b);
-		Model::UInt64<M> index = machine.pc.immediateUInt64(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
-		JB::IlValue* value = machine.locals.at(b, index);
+	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+		GEN_TRACE_MSG(b, "PUSH_LOCAL");
+		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
+		JB::IlValue* value = machine.locals.get(b, index);
 		machine.stack.pushInt64(b, value);
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
 
 template <Model::Mode M>
-struct PopLocalBuilder {
-	static constexpr std::size_t INSTR_SIZE = 5;
+struct GenPopLocal {
+	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	void build(Machine<M>& machine, JB::IlBuilder* b) {
-		GEN_TRACE(b);
-		Model::UInt<M> index = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_INDEX_OFFSET));
-		machine.locals.set(b, index, machine.stack.popUInt(b));
+	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+		GEN_TRACE_MSG(b, "POP_LOCAL");
+		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
+		machine.locals.set(b, index, machine.stack.popInt64(b));
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
-#endif ///////////////////////////
 
+#if 0
 template <Model::Mode M>
 struct BranchBuilder {
-	static constexpr std::size_t INSTR_SIZE = 5;
+	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_TARGET_OFFSET = 1;
 
 	void build(Machine<M>& machine, JB::IlBuilder* b) {
@@ -384,6 +383,7 @@ struct BranchBuilder {
 		// todo: machine.pc.next(b, Model::add(b, Model::Size<M>(b, INSTR_SIZE), target));
 	}
 };
+#endif // 0
 
 struct CallBuilderBase {
 protected:
@@ -481,6 +481,8 @@ public:
 		table.create(std::uint32_t(Op::HALT),       GenHalt<M>());
 		table.create(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
 		table.create(std::uint32_t(Op::ADD),        GenAdd<M>());
+		table.create(std::uint32_t(Op::PUSH_LOCAL), GenPushLocal<M>());
+		table.create(std::uint32_t(Op::POP_LOCAL),  GenPopLocal<M>());
 	}
 
 private:
@@ -575,6 +577,17 @@ Func* MakeAddThreeConstsFunction() {
 	return (Func*)buffer.release();
 }
 
+Func* MakePopThenPushToLocalFunction() {
+	OMR::ByteBuffer buffer;
+	buffer << Func(1, 0);
+	buffer << Op::PUSH_CONST << std::int64_t(999);
+	buffer << Op::PUSH_CONST << std::int64_t(123);
+	buffer << Op::POP_LOCAL << std::int64_t(0);
+	buffer << Op::PUSH_LOCAL << std::int64_t(0);
+	buffer << Op::HALT;
+	return (Func*)buffer.release();
+}
+
 void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpret) {
 	interpret(interpreter, target);
 }
@@ -584,7 +597,7 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func* target = MakeAddThreeConstsFunction();
+	Func* target = MakePopThenPushToLocalFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);

@@ -30,6 +30,7 @@ public:
 		b->Call("print_s", 1, b->Const((void*)"Pc initial value="));
 		b->Call("print_x", 1, value.unpack());
 		b->Call("print_s", 1, b->Const((void*)"\n"));
+
 		_pcReg.initialize(b, pcAddr, value);
 		_startPcReg.initialize(b, startPcAddr, value);
 
@@ -52,6 +53,14 @@ public:
 
 	RInt64 immediateInt64(JB::IlBuilder* b) {
 		return immediateInt64(b, RSize(b, 0));
+	}
+
+	RSize immediateSize(JB::IlBuilder* b, RSize offset) {
+		return RSize::pack(read<std::size_t>(b, offset.unpack()));
+	}
+
+	RSize immediateSize(JB::IlBuilder* b) {
+		return immediateSize(b, RSize(b, 0));
 	}
 
 	/// @group Inter-bytecode Control Flow
