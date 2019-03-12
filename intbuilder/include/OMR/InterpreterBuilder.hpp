@@ -26,6 +26,7 @@ public:
 			MachineT machine = _ib->spec().machine();
 			machine.reload(b);
 			generate(b, machine);
+			// machine.mergeInto(_ib.spec().machine());
 		}
 
 		std::vector<JB::IlBuilder::JBCase*>& cases() { return _cases; }
@@ -68,21 +69,26 @@ public:
 		JB::IlBuilder* loop = OrphanBuilder();
 		DoWhileLoop((char*)"interpreter_continue", &loop);
 
-		loop->Store("iterpreter_opcode", _spec.genDispatchValue(loop, _spec.machine()));
-
-#if 1
-		loop->Call("print_s", 1, loop->Const((void*)"*** WHILE LOOP START: opcode="));
+		{
+			MachineT machine = _spec.machine();
+			machine.reload(loop);
+			_spec.genDispatchValue(loop, machine);
+			loop->Store("interpreter_opcode", _spec.genDispatchValue(loop, machine));
+		}
+	
+		loop->Call("print_s", 1, loop->Const((void*)"$$$ *** INTERPRETING: opcode="));
 		loop->Call("print_u", 1, loop->Load("interpreter_opcode"));
 		loop->Call("print_s", 1, loop->Const((void*)"\n"));
-#endif
 
-		MachineT machine = _spec.machine();
 		JB::IlBuilder* defaultHandler = genDefaultHandler();
 		std::vector<JB::IlBuilder::JBCase*> handlers = genHandlers();
+
 		loop->Switch("interpreter_opcode", &defaultHandler, handlers.size(), handlers.data());
-		
+
 		_spec.genLeaveMethod(this);
+	
 		Return();
+
 		return true;
 	}
 

@@ -312,11 +312,11 @@ struct GenNop {
 };
 
 template <Model::Mode M>
-struct PushConstBuilder {
+struct GenPushConst {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
-	void build(Machine<M>& machine, JB::IlBuilder* b) {
+	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "PUSH_CONST");
 		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
 
@@ -331,10 +331,10 @@ struct PushConstBuilder {
 };
 
 template <Model::Mode M>
-struct AddBuilder {
+struct GenAdd {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	void build(Machine<M>& machine, JB::IlBuilder* b) {
+	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "ADD");
 		JB::IlValue* rhs = machine.stack.popInt64(b);
 		JB::IlValue* lhs = machine.stack.popInt64(b);
@@ -343,6 +343,7 @@ struct AddBuilder {
 	}
 };
 
+#if 0 ///////////////////////////
 template <Model::Mode M>
 struct PushLocalBuilder {
 	static constexpr std::size_t INSTR_SIZE = 5;
@@ -369,6 +370,7 @@ struct PopLocalBuilder {
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
 	}
 };
+#endif ///////////////////////////
 
 template <Model::Mode M>
 struct BranchBuilder {
@@ -465,8 +467,6 @@ public:
 		b->Call("print_x", 1, target32);
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 
-		b->Store("opcode", target32);
-
 		return target32;
 	}
 
@@ -476,10 +476,11 @@ public:
 
 	template <typename HandlerTableT>
 	void genHandlers(HandlerTableT& table) {
-		table.create(std::uint32_t(Op::UNKNOWN), GenError<M>());
-		table.create(std::uint32_t(Op::NOP),     GenNop<M>());
-		table.create(std::uint32_t(Op::HALT),    GenHalt<M>());
-		// table.create(std::uint32_t(Op::))
+		table.create(std::uint32_t(Op::UNKNOWN),    GenError<M>());
+		table.create(std::uint32_t(Op::NOP),        GenNop<M>());
+		table.create(std::uint32_t(Op::HALT),       GenHalt<M>());
+		table.create(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
+		table.create(std::uint32_t(Op::ADD),        GenAdd<M>());
 	}
 
 private:
@@ -498,33 +499,6 @@ public:
 private:
 	JB::TypeDictionary _typedict;
 };
-
-#if 0
-		{ //////////// NOP
-			IlBuilder* builder = nullptr;
-			cases.push_back(MakeCase(std::int32_t(Op::NOP), &builder, false));
-			Machine<Model::Mode::REAL> clone = machine;
-			clone.reload(builder);
-			NopBuilder<Model::Mode::REAL>().build(clone, builder);
-			clone.commit(builder);
-		}
-
-		{ //////////// PUSH_CONST
-			IlBuilder* builder = nullptr;
-			cases.push_back(MakeCase(std::int32_t(Op::PUSH_CONST), &builder, false));
-			Machine<Model::Mode::REAL> clone = machine;
-			clone.reload(builder);
-			PushConstBuilder<Model::Mode::REAL>().build(clone, builder);
-		}
-
-		{ //////////// ADD
-			IlBuilder* builder = nullptr;
-			cases.push_back(MakeCase(std::int32_t(Op::ADD), &builder, false));
-			Machine<Model::Mode::REAL> clone = machine;
-			clone.reload(builder);
-			AddBuilder<Model::Mode::REAL>().build(clone, builder);
-		}
-#endif
 
 /// Create the interpret function.
 ///
@@ -610,7 +584,7 @@ extern "C" int main(int argc, char** argv) {
 
 	InterpretFn interpret = buildInterpret();
 
-	Func* target = MakeNopThenHaltFunction();
+	Func* target = MakeAddThreeConstsFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);
