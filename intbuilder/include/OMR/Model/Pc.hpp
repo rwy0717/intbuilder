@@ -160,8 +160,7 @@ private:
 /// immediates and program decoding is collapsed to real constant values.
 class VirtPc {
 public:
-	VirtPc(JB::IlValue* pcAddr, JB::IlValue* startPcAddr)
-		: _pcReg(pcAddr), _startPcReg(startPcAddr) {}
+	VirtPc() : _pcReg(), _startPcReg() {}
 
 	CUInt64 immediateUInt64(JB::IlBuilder* b, CSize offset) {
 		return CUInt64(b, read<std::uint64_t>(offset.unpack()));
@@ -200,9 +199,14 @@ public:
 
 	CPtr<std::uint8_t> load(JB::IlBuilder* b) { return _pcReg.load(b); }
 
-	void initialize(JB::IlBuilder* b, CPtr<std::uint8_t> function) {
-		_pcReg.initialize(b, function);
-		_startPcReg.initialize(b, function);
+	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* startPcAddr, CPtr<std::uint8_t> value) {
+
+		b->Call("print_s", 1, b->Const((void*)"Pc initial value="));
+		b->Call("print_x", 1, value.unpack());
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		_pcReg.initialize(b, pcAddr, value);
+		_startPcReg.initialize(b, startPcAddr, value);
 	}
 
 	void commit(JB::IlBuilder* b) {
@@ -211,6 +215,11 @@ public:
 	}
 
 	void reload(JB::IlBuilder* b) {}
+
+	void mergeInto(JB::IlBuilder* b, VirtPc& dest) {
+		_pcReg.mergeInto(b, dest._pcReg);
+		_startPcReg.mergeInto(b, dest._startPcReg);
+	}
 
 	JB::BytecodeBuilderTable* bytecodeBuilders() { return &_bytecodeBuilders; }
 

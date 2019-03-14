@@ -81,7 +81,7 @@ public:
 	void mergeInto(JB::IlBuilder* b, StaticRegister<Mode::REAL, T>& other) {
 		assert(_vtype == other._vtype);
 		assert(_ptype == other._ptype);
-		b->StoreOver(_value, other._value);
+		// b->StoreOver(_value, other._value);
 	}
 
 private:
@@ -94,7 +94,7 @@ private:
 template <typename T>
 class StaticRegister<Mode::VIRT, T> {
 public:
-	StaticRegister(JB::IlValue* address) : _address(address) {}
+	StaticRegister() : _address(nullptr) {}
 
 	StaticRegister(const StaticRegister<Mode::VIRT, T>& other) = default;
 
@@ -106,18 +106,26 @@ public:
 		_value = value.unpack();
 	}
 
-	void initialize(OMR_UNUSED JB::IlBuilder* b, CValue<T> value) {
+	void initialize(OMR_UNUSED JB::IlBuilder* b, JB::IlValue* address, CValue<T> value) {
+		_address = address;
 		store(b, value);
 	}
 
 	void commit(JB::IlBuilder* b) {
-		b->StoreAt(_address, b->Const(static_cast<typename RemoveUnsigned<T>::Type>(_value)));
+		b->StoreAt(_address, constant(b, _value));
 	}
 
 	void reload(OMR_UNUSED JB::IlBuilder* b) {}
 
 	// Convert to internal representation.
 	T unpack() const { return _value; }
+
+	void mergeInto(JB::IlBuilder* b, StaticRegister& reg) {
+		/// RWY TODO: There is actually no state to merge here. The register's value is
+		/// static, which means that the destination should have it's own value.
+		/// there is nothing left to do.
+		/// The todo is, is this actually true?
+	}
 
 private:
 	JB::IlValue* _address;
@@ -144,6 +152,7 @@ public:
 	void commit(OMR_UNUSED JB::IlBuilder* b) {}
 
 	void reload(OMR_UNUSED JB::IlBuilder* b) {}
+
 
 	T unpack() const { return _value; }
 

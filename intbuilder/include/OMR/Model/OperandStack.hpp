@@ -61,7 +61,7 @@ public:
 
 	/// reserve n 64bit elements on the stack. Returns a pointer to the zeroth element.
 	/// In the virtual operand stack, this is "unbuffered" storage left on the stack.
-	JB::IlValue* reserve64(JB::IlBuilder* b, RSize nelements) {
+	JB::IlValue* reserve64(JB::IlBuilder* b, CSize nelements) {
 		JB::IlValue* start = _sp.load(b);
 		_sp.store(b, b->Add(start, b->Mul(b->ConstInt64(8), nelements.toIl(b))));
 

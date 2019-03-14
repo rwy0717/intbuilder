@@ -86,6 +86,12 @@ public:
 		}
 	}
 
+	void mergeInto(JB::IlBuilder* b, VirtOperandArray& dest) {
+		for (std::size_t i = 0; i < _values.size(); ++i) {
+			b->StoreOver(dest._values[i], _values[i]);
+		}
+	}
+
 private:
 	JB::IlType* _type;
 	JB::IlType* _ptype;

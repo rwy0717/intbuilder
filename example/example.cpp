@@ -69,7 +69,7 @@ public:
 
 	void commit(JB::IlBuilder* b) {}
 
-	void mergeInto(JB::IlBuilder* b, ModelFunc<Model::Mode::VIRT>* dest) {}
+	void mergeInto(JB::IlBuilder* b, ModelFunc<Model::Mode::VIRT>& dest) {}
 
 private:
 	Func* _function;
@@ -529,6 +529,9 @@ public:
 
 	template <typename HandlerTableT>
 	void genHandlers(HandlerTableT& table) {
+
+		fprintf(stderr, "creating handlers!\n");
+
 		table.create(std::uint32_t(Op::UNKNOWN),    GenError<M>());
 		table.create(std::uint32_t(Op::NOP),        GenNop<M>());
 		table.create(std::uint32_t(Op::HALT),       GenHalt<M>());
@@ -633,6 +636,24 @@ private:
 	JB::TypeDictionary _typedict;
 };
 
+class MethodBuilder : public Model::SpecMethodBuilder<VirtInstructionSet> {
+public:
+	MethodBuilder(Model::Compiler<VirtInstructionSet>& compiler, Func* target)
+		: Model::SpecMethodBuilder<VirtInstructionSet>(compiler), _func(target) {
+
+	}
+
+	virtual std::shared_ptr<VirtMachine> initialize() override final {
+		VirtMachine::Factory factory;
+		factory.setInterpreter(Load("interpreter"));
+		factory.setFunction(Model::CUIntPtr::pack(std::uintptr_t(_func)));
+		return std::shared_ptr<VirtMachine>(factory.create(this));
+	}
+
+private:
+	Func* _func;
+};
+
 /// Create the interpret function.
 ///
 InterpretFn buildInterpret() {
@@ -647,10 +668,10 @@ void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpre
 	interpret(interpreter, target);
 }
 
-void* compile(Func* target) {
+CompiledFn compile(Func* target) {
 	CompilerGlobals globals;
 	OMR::Model::Compiler<VirtInstructionSet> compiler(globals.typedict());
-
+	MethodBuilder builder(compiler, target);
 	return nullptr; // compiler.compile(target);
 }
 
@@ -733,6 +754,11 @@ Func* MakePopThenPushToLocalFunction() {
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
 
+#if 1
+	Func* target = MakePopThenPushToLocalFunction();
+	CompiledFn cfunc = compile(target);
+	free(target);
+#else
 	InterpretFn interpret = buildInterpret();
 
 	Func* target = MakePopThenPushToLocalFunction();
@@ -748,6 +774,8 @@ extern "C" int main(int argc, char** argv) {
 	fprintf(stderr, "int main: stack[0]=%llu\n", interpreter.peek(0));
 
 	free(target);
+#endif
+
 	return 0;
 }
 

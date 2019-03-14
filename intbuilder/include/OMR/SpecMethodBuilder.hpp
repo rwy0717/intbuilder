@@ -35,6 +35,7 @@ public:
 	void create(std::uint32_t opcode, GenerateT&& generate) {
 		assert(_handlers.count(opcode) == 0); // do not allow double inserts.
 		_handlers[opcode] = GeneratorFn(generate);
+		fprintf(stderr, "create handler bc=%x handler=%p\n", opcode, _handlers[opcode]. template target<void>());
 	}
 
 private:
@@ -49,12 +50,19 @@ class SpecMethodBuilder : public JB::MethodBuilder {
 public:
 	using Compiler = Compiler<SpecT, MachineT>;
 
-	SpecMethodBuilder(Compiler& compiler) : _compiler(compiler) {
+	SpecMethodBuilder(Compiler& compiler)
+		: JB::MethodBuilder(compiler.typedict()), _compiler(compiler) {
+		_compiler.spec().initialize(this);
 	}
 
 	virtual bool buildIL() override final {
+
+		std::shared_ptr<MachineT> machine = initialize();
+
 		return false;
 	}
+
+	virtual std::shared_ptr<MachineT> initialize() = 0;
 
 private:
 	Compiler& _compiler;
