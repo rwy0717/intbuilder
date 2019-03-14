@@ -663,10 +663,19 @@ public:
 		std::shared_ptr<VirtMachine> machine = initialize();
 		AppendBuilder(_builders.get(this, 0));
 		std::int32_t index;
+
 		while((index = GetNextBytecodeFromWorklist()) != -1) {
+
+			std::uint8_t* pc = reinterpret_cast<std::uint8_t*>(_func->body + index);
+			std::uint8_t op = *pc;
+		
+			fprintf(stderr, "compiling index=%u opcode=%u\n", index, op);
 			OMR_TRACE();
-			handlers()[index](this, *machine);
+			handlers()[op](this, *machine);
 		}
+
+		Return();
+	
 		return true;
 	}
 
@@ -782,8 +791,10 @@ extern "C" int main(int argc, char** argv) {
 	initializeJit();
 
 #if 1
+	Interpreter interpreter;
 	Func* target = MakePopThenPushToLocalFunction();
 	CompiledFn cfunc = compile(target);
+	cfunc(&interpreter);
 	free(target);
 #else
 	InterpretFn interpret = buildInterpret();
