@@ -31,6 +31,10 @@ public:
 
 	JB::TypeDictionary* typedict() const { return _typedict; }
 
+	HandlerMap& handlers() { return _handlers; }
+
+	const HandlerMap& handlers() const { return _handlers; }
+
 	template <typename GenerateT>
 	void create(std::uint32_t opcode, GenerateT&& generate) {
 		assert(_handlers.count(opcode) == 0); // do not allow double inserts.
@@ -55,15 +59,19 @@ public:
 		_compiler.spec().initialize(this);
 	}
 
-	virtual bool buildIL() override final {
+	virtual bool buildIL() override {
 
-		std::shared_ptr<MachineT> machine = initialize();
+		// std::shared_ptr<MachineT> machine = initialize();
 
+		// return false;
 		return false;
 	}
 
 	virtual std::shared_ptr<MachineT> initialize() = 0;
 
+	typename Compiler::HandlerMap& handlers() const { return _compiler.handlers(); }
+
+	Compiler& compiler() const { return _compiler; }
 private:
 	Compiler& _compiler;
 };

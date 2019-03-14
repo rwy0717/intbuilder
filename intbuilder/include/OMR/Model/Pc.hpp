@@ -134,11 +134,11 @@ private:
 	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
 		JB::TypeDictionary* t = b->typeDictionary();
 
-		JB::IlValue* addr = b->IndexAt(t->pInt8, _pcReg.unpack(), offset);
+		JB::IlValue* addr = b->IndexAt(t->pInt8, _pcReg.load(b).toIl(b), offset);
 		JB::IlValue* value = b->LoadAt(t->PointerTo(t->toIlType<T>()), addr);
 
 		b->Call("print_s", 1, b->Const((void*)"PC READ: pc="));
-		b->Call("print_x", 1, _pcReg.unpack());
+		b->Call("print_x", 1, _pcReg.load(b).toIl(b));
 		b->Call("print_s", 1, b->Const((void*)" offset="));
 		b->Call("print_x", 1, offset);
 		b->Call("print_s", 1, b->Const((void*)" addr="));
@@ -202,7 +202,7 @@ public:
 	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddr, JB::IlValue* startPcAddr, CPtr<std::uint8_t> value) {
 
 		b->Call("print_s", 1, b->Const((void*)"Pc initial value="));
-		b->Call("print_x", 1, value.unpack());
+		b->Call("print_x", 1, value.toIl(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 
 		_pcReg.initialize(b, pcAddr, value);

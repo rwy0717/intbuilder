@@ -66,7 +66,7 @@ public:
 		_sp.store(b, b->Add(start, b->Mul(b->ConstInt64(8), nelements.toIl(b))));
 
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: reserve64: nelements="));
-		b->Call("print_u", 1, nelements.unpack());
+		b->Call("print_u", 1, nelements.toIl(b));
 		b->Call("print_s", 1, b->Const((void*)" new-sp="));
 		b->Call("print_x", 1, _sp.load(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));

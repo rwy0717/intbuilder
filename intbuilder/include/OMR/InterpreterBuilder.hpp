@@ -44,7 +44,7 @@ public:
 		_spec(std::forward<Args>(args)...) {
 
 		DefineName("interpret");
-		DefineLine("0");
+		DefineLine("0");	
 		DefineFile("<generated>");
 
 		DefineLocal("interpreter_opcode", t->Int32);
