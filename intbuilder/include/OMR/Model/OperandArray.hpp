@@ -61,15 +61,15 @@ public:
 		_values.assign(length.unpack(), nullptr);
 	}
 
-	void set(JB::IlBuilder* b, CUInt index, JB::IlValue* value) {
+	void set(JB::IlBuilder* b, CSize index, JB::IlValue* value) {
 		_values.at(index.unpack()) = value;
 	}
 
-	JB::IlValue* get(JB::IlBuilder* b, CUInt index) {
+	JB::IlValue* get(JB::IlBuilder* b, CSize index) {
 		return _values.at(index.unpack());
 	}
 
-	CUInt length() const { return CUInt::pack(_values.size()); }
+	CSize length() const { return CSize::pack(_values.size()); }
 
 	void commit(JB::IlBuilder* b) {
 		for (std::size_t i = 0; i < _values.size(); ++i) {

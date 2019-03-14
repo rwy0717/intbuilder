@@ -91,6 +91,8 @@ public:
 	/// For REAL values, that is a JB::IlValue* representing a run-time value.
 	JB::IlValue* unpack() const noexcept { return _value; }
 
+	JB::IlValue* get() const noexcept { return _value; }
+
 private:
 	Value(JB::IlValue* value) : _value(value) {}
 
@@ -204,56 +206,6 @@ using CPtrDiff = CValue<std::ptrdiff_t>;
 /// @}
 ///
 
-template <Mode M, typename T>
-struct Add;
-
-template <typename T>
-struct Add<Mode::REAL, T> {
-	RValue<T> operator()(JB::IlBuilder* b, RValue<T> lhs, RValue<T> rhs) {
-		return RValue<T>::pack(b->Add(lhs.unpack(), rhs.unpack()));
-	}
-};
-
-template <typename T>
-struct Add<Mode::VIRT, T> {
-	CValue<T> operator()(OMR_UNUSED JB::IlBuilder* b, CValue<T> lhs, CValue<T> rhs) {
-		return CValue<T>::pack(lhs.unpack() + rhs.unpack());
-	}
-};
-
-template <Mode M, typename T>
-Value<M, T> add(JB::IlBuilder* b, Value<M, T> lhs, Value<M, T> rhs) {
-	return Add<M, T>()(b, lhs, rhs);
-}
-
-template <Mode M, typename T>
-struct Sub;
-
-template <typename T>
-struct Sub<Mode::REAL, T> {
-	RValue<T> operator()(JB::IlBuilder* b, RValue<T> lhs, RValue<T> rhs) {
-		return RValue<T>::pack(b->Sub(lhs.unpack(), rhs.unpack()));
-	}
-};
-
-template <typename T>
-struct Sub<Mode::REAL, T*> {
-	RValue<std::ptrdiff_t> operator()(JB::IlBuilder* b, RValue<T> lhs, RValue<T> rhs) {
-		return RValue<std::ptrdiff_t>::pack(b->Sub(lhs.unpack(), rhs.unpack()));
-	}
-};
-
-template <typename T>
-struct Sub<Mode::VIRT, T> {
-	CValue<T> operator()(OMR_UNUSED JB::IlBuilder* b, CValue<T> lhs, CValue<T> rhs) {
-		return CValue<T>::pack(lhs.unpack() - rhs.unpack());
-	}
-};
-
-template <Mode M, typename T>
-Value<M, T> sub(JB::IlBuilder* b, Value<M, T> lhs, Value<M, T> rhs) {
-	return Sub<M, T>()(b, lhs, rhs);
-}
 
 }  // namespace Model
 }  // namespace OMR

@@ -6,7 +6,21 @@
 #include <unordered_map>
 
 template <typename T>
-struct Span {
+struct Span final {
+public:
+	Span() = default;
+
+	Span(const Span<T>&) = default;
+
+	Span(T* data, std::size_t length) : _data(data), _length(length) {}
+
+	T* data() const { return _data; }
+
+	std::size_t length() const { return length; }
+
+	std::size_t nbytes() const { return _length * sizeof(T); }
+
+private:
 	T* data_;
 	std::size_t length_;  // in elements
 };

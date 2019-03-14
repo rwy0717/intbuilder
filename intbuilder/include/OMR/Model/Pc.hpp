@@ -163,27 +163,30 @@ public:
 	VirtPc(JB::IlValue* pcAddr, JB::IlValue* startPcAddr)
 		: _pcReg(pcAddr), _startPcReg(startPcAddr) {}
 
-	CUInt immediateUInt(JB::IlBuilder* b, CUInt offset) {
-		return CUInt(b, read<unsigned int>(offset.unpack()));
+	CUInt64 immediateUInt64(JB::IlBuilder* b, CSize offset) {
+		return CUInt64(b, read<std::uint64_t>(offset.unpack()));
 	}
 
-	CUInt immediateUInt(JB::IlBuilder* b) {
-		return immediateUInt(b, CUInt(b, 0));
+	CUInt64 immediateUInt64(JB::IlBuilder* b) {
+		return immediateUInt64(b, CSize(b, 0));
 	}
 
-	CInt immediateInt(JB::IlBuilder* b, CUInt offset) {
-		return CInt(b, read<int>(offset.unpack()));
+	CInt64 immediateInt64(JB::IlBuilder* b, CSize offset) {
+		return CInt64(b, read<std::int64_t>(offset.unpack()));
 	}
 
-	CInt immediateInt(JB::IlBuilder* b) {
-		return immediateInt(b, CUInt(b, 0));
+	CInt64 immediateInt64(JB::IlBuilder* b) {
+		return immediateInt64(b, CSize(b, 0));
 	}
 
-	void next(JB::IlBuilder* b, CUInt offset) {
-		assert(0);
-		// npc = _pc.unpack() + offset.unpack();
+	CSize immediateSize(JB::IlBuilder* b, CSize offset) {
+		return CSize(b, read<std::int64_t>(offset.unpack()));
+	}
+
+	void next(JB::IlBuilder* b, CSize offset) {
+		b->Call("print_s", 1, b->Const((void*)NULL)); // assert
+		// next_pc = _pc.unpack() + offset.unpack();
 		// bb = getbuilder(npc);
-
 		_pcReg.store(b, CPtr<std::uint8_t>::pack(_pcReg.unpack() + offset.unpack()));
 	}
 
@@ -210,7 +213,6 @@ public:
 	void reload(JB::IlBuilder* b) {}
 
 	JB::BytecodeBuilderTable* bytecodeBuilders() { return &_bytecodeBuilders; }
-
 
 private:
 	template <typename T>
