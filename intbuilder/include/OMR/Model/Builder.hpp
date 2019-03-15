@@ -11,16 +11,27 @@
 
 #include <type_traits>
 
+#include <OMR/TypeTraits.hpp>
+
 namespace OMR {
 namespace Model {
 
-class BaseBuilder {
-};
-
-template <Mode M> class Builder;
+template <Mode M>
+struct IlBuilderAlias;
 
 template <>
-class Builder<Mode::REAL> {
+struct IlBuilderAlias<Mode::REAL> : TypeAlias<JitBuilder::BytecodeBuilder> {};
+
+template <>
+struct IlBuilderAlias<Mode::VIRT> : TypeAlias<JitBuilder::IlBuilder> {};
+
+template <Mode M>
+using IlBuilder = typename IlBuilderAlias<M>::Type;
+
+#if 0 ////////////////////////////////////////
+
+template <>
+class Builder<Mode::REAL> : public JitBuilder::IlBuilder {
 public:
 	explicit Builder(JitBuilder::IlBuilder* b) : _b(b) {}
 
@@ -40,7 +51,8 @@ private:
 	JitBuilder::IlBuilder* _b;
 };
 
-template <> class Builder<Mode::VIRT> {
+template <>
+class Builder<Mode::VIRT> : public JitBuilder::BytecodeBuilder {
 public:
 	static Builder<Mode::VIRT> pack(JitBuilder::IlBuilder* b) {
 		return Builder(b);
@@ -54,8 +66,10 @@ private:
 	JitBuilder::IlBuilder* _b;
 };
 
-using RBuilder = Builder<Mode::REAL>;
-using CBuilder = Builder<Mode::VIRT>;
+
+
+using RealIlBuilder = IlBuilder<Mode::REAL>;
+using VirtIlBuilder = IlBuilder<Mode::VIRT>;
 
 template <typename T>
 JitBuilder::IlType* ilType(RBuilder b) {
@@ -121,6 +135,8 @@ template <Mode M, typename T>
 Value<M, T> sub(JB::IlBuilder* b, Value<M, T> lhs, Value<M, T> rhs) {
 	return Sub<M, T>()(b, lhs, rhs);
 }
+
+#endif ////////////////////////////////////////
 
 }  // namespace Model
 }  // namespace OMR

@@ -1,6 +1,7 @@
 #if !defined(OMR_MODEL_PC_HPP_)
 #define OMR_MODEL_PC_HPP_
 
+#include <OMR/Model/ControlFlow.hpp>
 #include <OMR/Model/Mode.hpp>
 #include <OMR/Model/Value.hpp>
 #include <OMR/Model/StaticRegister.hpp>
@@ -19,7 +20,7 @@ namespace Model {
 /// startPc
 class RealPc {
 public:
-	RealPc() : _pcReg(), _startPcReg() {}
+	RealPc(OMR_UNUSED MethodBuilderData* data) : _pcReg(), _startPcReg() {}
 
 	RealPc(const RealPc& other) = default;
 
@@ -160,7 +161,7 @@ private:
 /// immediates and program decoding is collapsed to real constant values.
 class VirtPc {
 public:
-	VirtPc() : _pcReg(), _startPcReg() {}
+	VirtPc(MethodBuilderData* mbdata) : _pcReg(), _startPcReg(), _controlFlow(mbdata) {}
 
 	CUInt64 immediateUInt64(JB::IlBuilder* b, CSize offset) {
 		return CUInt64(b, read<std::uint64_t>(offset.unpack()));
@@ -175,7 +176,7 @@ public:
 	}
 
 	CInt64 immediateInt64(JB::IlBuilder* b) {
-		return immediateInt64(b, CSize(b, 0));
+	return immediateInt64(b, CSize(b, 0));
 	}
 
 	CSize immediateSize(JB::IlBuilder* b, CSize offset) {
@@ -183,10 +184,17 @@ public:
 	}
 
 	void next(JB::IlBuilder* b, CSize offset) {
-		b->Call("print_s", 1, b->Const((void*)NULL)); // assert
-		// next_pc = _pc.unpack() + offset.unpack();
-		// bb = getbuilder(npc);
+		JB::BytecodeBuilder* bb = static_cast<JB::BytecodeBuilder*>(b);
+		std::size_t index = _pcReg.unpack() - _startPcReg.unpack() + offset.unpack();
+
+		b->Call("print_s", 1, b->Const((void*)"VirtPc: next offset=\n"));
+		b->Call("print_u", 1, offset.toIl(b));
+		b->Call("print_s", 1, b->Const((void*)" index=\n"));
+		b->Call("print_u", 1, b->Const((std::int64_t)index));
+	
 		_pcReg.store(b, CPtr<std::uint8_t>::pack(_pcReg.unpack() + offset.unpack()));
+		_controlFlow.next(b, index);
+		
 	}
 
 	CUIntPtr offset(JB::IlBuilder* b) const {
@@ -221,8 +229,6 @@ public:
 		_startPcReg.mergeInto(b, dest._startPcReg);
 	}
 
-	JB::BytecodeBuilderTable* bytecodeBuilders() { return &_bytecodeBuilders; }
-
 private:
 	template <typename T>
 	T read(std::size_t offset = 0) {
@@ -231,16 +237,14 @@ private:
 
 	VirtStaticRegister<std::uint8_t*> _pcReg;      // program counter
 	VirtStaticRegister<std::uint8_t*> _startPcReg; // function pointer
-
-	JB::BytecodeBuilder* _currentBytecodeBuilder;
-	JB::BytecodeBuilderTable _bytecodeBuilders;
+	VirtControlFlow _controlFlow;
 };
 
-template <Mode M> struct ModalPcAlias;
-template <> struct ModalPcAlias<Mode::REAL> : TypeAlias<RealPc> {};
-template <> struct ModalPcAlias<Mode::VIRT> : TypeAlias<VirtPc> {};
+template <Mode M> struct PcAlias;
+template <> struct PcAlias<Mode::REAL> : TypeAlias<RealPc> {};
+template <> struct PcAlias<Mode::VIRT> : TypeAlias<VirtPc> {};
 
-template <Mode M> using Pc = typename ModalPcAlias<M>::Type;
+template <Mode M> using Pc = typename PcAlias<M>::Type;
 
 }  // namespace Model
 }  // namespace OMR

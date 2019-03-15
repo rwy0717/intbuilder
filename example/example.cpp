@@ -133,6 +133,8 @@ public:
 
 		void setFunction(Model::UIntPtr<M> function) { _function = function; }
 
+		void setData(Model::MethodBuilderData* data) { _data = data; }
+
 		Machine<M>* create(JB::IlBuilder* b) {
 
 			JB::TypeDictionary* t = b->typeDictionary();
@@ -140,7 +142,7 @@ public:
 			assert(_interpreter != nullptr);
 			// TODO: assert(_function != nullptr);
 	
-			Machine<M>* machine = new Machine<M>();
+			Machine<M>* machine = new Machine<M>(_data);
 
 			JB::IlValue* pcAddr      = b->StructFieldInstanceAddress("Interpreter", "_pc",      _interpreter);
 			JB::IlValue* spAddr      = b->StructFieldInstanceAddress("Interpreter", "_sp",      _interpreter);
@@ -162,7 +164,10 @@ public:
 	private:
 		JB::IlValue* _interpreter = nullptr;
 		Model::UIntPtr<M> _function;
+		Model::MethodBuilderData* _data = nullptr;
 	};
+
+	Machine(Model::MethodBuilderData* data) : pc(data) {}
 
 	Machine(const Machine&) = default;
 
@@ -653,17 +658,23 @@ public:
 	}
 
 	virtual std::shared_ptr<VirtMachine> initialize() override final {
+		OMR_TRACE();
 		VirtMachine::Factory factory;
 		factory.setInterpreter(Load("interpreter"));
 		factory.setFunction(Model::CUIntPtr::pack(std::uintptr_t(_func)));
-		return std::shared_ptr<VirtMachine>(factory.create(this));
+		factory.setData(data());
+		std::shared_ptr<VirtMachine> machine(factory.create(this));
+		setVMState(machine.get());
+		return machine;
 	}
 
 	virtual bool buildIL() override final {
-		std::shared_ptr<VirtMachine> machine = initialize();
-		AppendBuilder(_builders.get(this, 0));
-		std::int32_t index;
+		OMR_TRACE();
+		_machine = initialize();
+		setVMState(_machine.get());
+		AppendBuilder(data()->bcbuilders().get(this, 0));
 
+		std::int32_t index;
 		while((index = GetNextBytecodeFromWorklist()) != -1) {
 
 			std::uint8_t* pc = reinterpret_cast<std::uint8_t*>(_func->body + index);
@@ -671,7 +682,7 @@ public:
 		
 			fprintf(stderr, "compiling index=%u opcode=%u\n", index, op);
 			OMR_TRACE();
-			handlers()[op](this, *machine);
+			handlers()[op](data()->bcbuilders().get(this, index), *_machine);
 		}
 
 		Return();
@@ -683,8 +694,8 @@ public:
 	// 	return GenDispatch()(this, machine)
 	// }
 private:
+	std::shared_ptr<VirtMachine> _machine;
 	Func* _func;
-	JB::BytecodeBuilderTable _builders;
 };
 
 /// Create the interpret function.

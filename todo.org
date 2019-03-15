@@ -1,0 +1,16 @@
+#+TITLE: Todos
+
+* TODO Add 
+
+* TODO More builder utilities
+- static load
+- static constants
+- static add / sub
+- pointer indexing
+
+* TODO: Struct access utilities
+
+* TODO Merge virt/real Func interfaces
+- needs a static load utility
+
+* TODO Investigate 

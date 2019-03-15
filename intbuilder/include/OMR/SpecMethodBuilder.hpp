@@ -1,6 +1,7 @@
 #if !defined(OMR_MODEL_COMPILERBUILDER_HPP_)
 #define OMR_MODEL_COMPILERBUILDER_HPP_
 
+#include <BytecodeBuilderTable.hpp>
 #include <MethodBuilder.hpp>
 #include <IlBuilder.hpp>
 
@@ -49,6 +50,14 @@ private:
 	JB::TypeDictionary* _typedict;
 };
 
+class MethodBuilderData {
+public:
+	JB::BytecodeBuilderTable& bcbuilders() { return _bcbuilders; }
+
+private:
+	JB::BytecodeBuilderTable _bcbuilders;
+};
+
 template <typename SpecT, typename MachineT = typename SpecT::MachineType>
 class SpecMethodBuilder : public JB::MethodBuilder {
 public:
@@ -56,11 +65,11 @@ public:
 
 	SpecMethodBuilder(Compiler& compiler)
 		: JB::MethodBuilder(compiler.typedict()), _compiler(compiler) {
-		_compiler.spec().initialize(this);
+		
 	}
 
 	virtual bool buildIL() override {
-
+		// _compiler.spec().initialize(this);
 		// std::shared_ptr<MachineT> machine = initialize();
 
 		// return false;
@@ -72,8 +81,12 @@ public:
 	typename Compiler::HandlerMap& handlers() const { return _compiler.handlers(); }
 
 	Compiler& compiler() const { return _compiler; }
+
+	MethodBuilderData* data() { return &_data; }
+
 private:
 	Compiler& _compiler;
+	MethodBuilderData _data;
 };
 
 }  // namespace Model

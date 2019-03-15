@@ -5,6 +5,7 @@
 #include <BytecodeBuilder.hpp>
 
 #include <map>
+#include <cstdio>
 
 namespace OMR {
 namespace JitBuilder {
@@ -15,13 +16,14 @@ public:
 	using Iter = Map::iterator;
 	using Node = std::pair<const std::size_t, BytecodeBuilder*>;
 
-	BytecodeBuilder* get(MethodBuilder* mb, std::size_t index) {
+	BytecodeBuilder* get(IlBuilder* b, std::size_t index) {
 		std::pair<Iter, bool> search = _map.insert(Node(index, nullptr));
 		Iter iter = search.first;
 		bool found = search.second;
 		if (found) {
 			assert(iter->second == nullptr);
-			iter->second = mb->OrphanBytecodeBuilder(index, strdup("unknown-bytecode"));
+			iter->second = b->OrphanBytecodeBuilder(index, (char*)"unknown-bytecode");
+			fprintf(stderr, "@@@ BytecodeBuilderTable: creating bytecode builder index=%lu\n", index);
 		}
 		assert(iter->second != nullptr);
 		return iter->second;
