@@ -820,11 +820,9 @@ extern "C" int main(int argc, char** argv) {
 	fprintf(stderr, "int main: initial sp=%p\n", interpreter.sp());
 	interpret_wrap(&interpreter, target, interpret);
 
-	fprintf(stderr, "int main: stack[0]=%llu\n", interpreter.peek(0));
-
 	free(target);
 #endif
 
+	fprintf(stderr, "int main: stack[0]=%llu\n", interpreter.peek(0));
 	return 0;
 }
-
