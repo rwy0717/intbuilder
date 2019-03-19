@@ -26,14 +26,6 @@ public:
 
 	StaticRegister(const StaticRegister&) = default;
 
-	/*
-	StaticRegister(const StaticRegister& other) :
-		_vtype(other._vtype),
-		_ptype(other._ptype),
-		_address(_address),
-		_value(_value) {}
-	*/
-
 	StaticRegister(StaticRegister&& other) = default;
 
 	/// Static Initialization

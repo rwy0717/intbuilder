@@ -10,10 +10,10 @@
 #include <OMR/Model/Pc.hpp>
 #include <OMR/Model/Builder.hpp>
 
-#include <OMR/SpecMethodBuilder.hpp>
+#include <OMR/BytecodeInterpreterBuilder.hpp>
+#include <OMR/BytecodeMethodBuilder.hpp>
 
 #include <OMR/ByteBuffer.hpp>
-#include <OMR/InterpreterBuilder.hpp>
 
 #include <VirtualMachineState.hpp>
 #include <TypeDictionary.hpp>
@@ -124,6 +124,7 @@ private:
 	JB::IlValue* _address;
 };
 
+/* RWY TODO: inherit from OMR::Model::Machine<M> */ 
 template <Model::Mode M>
 class Machine final : public JB::VirtualMachineState {
 public:
@@ -133,7 +134,7 @@ public:
 
 		void setFunction(Model::UIntPtr<M> function) { _function = function; }
 
-		void setData(Model::MethodBuilderData* data) { _data = data; }
+		void setBuilders(JB::BytecodeBuilderTable* builders) { _builders = builders; }
 
 		Machine<M>* create(JB::IlBuilder* b) {
 
@@ -142,7 +143,7 @@ public:
 			assert(_interpreter != nullptr);
 			// TODO: assert(_function != nullptr);
 	
-			Machine<M>* machine = new Machine<M>(_data);
+			Machine<M>* machine = new Machine<M>(_builders);
 
 			JB::IlValue* pcAddr      = b->StructFieldInstanceAddress("Interpreter", "_pc",      _interpreter);
 			JB::IlValue* spAddr      = b->StructFieldInstanceAddress("Interpreter", "_sp",      _interpreter);
@@ -164,10 +165,10 @@ public:
 	private:
 		JB::IlValue* _interpreter = nullptr;
 		Model::UIntPtr<M> _function;
-		Model::MethodBuilderData* _data = nullptr;
+		JB::BytecodeBuilderTable* _builders = nullptr;
 	};
 
-	Machine(Model::MethodBuilderData* data) : pc(data) {}
+	Machine(JB::BytecodeBuilderTable* builders) : pc(builders) {}
 
 	Machine(const Machine&) = default;
 
@@ -289,35 +290,6 @@ void gen_dbg_msg(JB::IlBuilder* b, const char* file, std::size_t line, const cha
 #define GEN_TRACE(b) GEN_DBG_MSG(b, "trace")
 
 template <Model::Mode M>
-struct InitializeMethod;
-
-template <>
-struct InitializeMethod<Model::Mode::REAL> {
-	void operator()(JB::MethodBuilder* b) {
-		OMR_TRACE();
-		JB::TypeDictionary* t = b->typeDictionary();
-		JitHelpers::define(b);
-		b->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
-		b->DefineParameter("target",      t->PointerTo(t->LookupStruct("Func")));
-		b->DefineReturnType(t->NoType);
-	}
-};
-
-template <>
-struct InitializeMethod<Model::Mode::VIRT> {
-	void operator()(JB::MethodBuilder* b, Func* target) {
-		OMR_TRACE();
-		// TODO RWY: In the virtual method entrance, the parameters _should be_ the function parameters
-		// Not the interpreter pointer or anything like that. The func address ought to be constant.
-		// The func address ought to be a constant, as well.
-		JB::TypeDictionary* t = b->typeDictionary();
-		JitHelpers::define(b);
-		b->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
-		b->DefineReturnType(t->NoType);
-	}
-};
-
-template <Model::Mode M>
 struct GenFunctionEntry;
 
 template <>
@@ -368,18 +340,20 @@ struct GenDefault {
 
 template <Model::Mode M>
 struct GenError {
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ERROR (UNKNOWN BYTECODE)");
 		halt(b, machine);
+		return true;
 	}
 };
 
 template <Model::Mode M>
 struct GenHalt {
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "HALT");
 		halt(b, machine);
+		return true;
 	}
 };
 
@@ -387,10 +361,11 @@ template <Model::Mode M>
 struct GenNop {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "NOP");
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		return true;
 	}
 };
 
@@ -399,7 +374,7 @@ struct GenPushConst {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_CONST");
 		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
@@ -411,6 +386,7 @@ struct GenPushConst {
 		machine.stack.pushInt64(b, c.toIl(b));
 
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		return true;
 	}
 };
 
@@ -418,13 +394,14 @@ template <Model::Mode M>
 struct GenAdd {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ADD");
 		JB::IlValue* rhs = machine.stack.popInt64(b);
 		JB::IlValue* lhs = machine.stack.popInt64(b);
 		machine.stack.pushInt64(b, b->Add(lhs, rhs));
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		return true;
 	}
 };
 
@@ -433,13 +410,14 @@ struct GenPushLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_LOCAL");
 		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
 		JB::IlValue* value = machine.locals.get(b, index);
 		machine.stack.pushInt64(b, value);
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		return true;
 	}
 };
 
@@ -448,12 +426,13 @@ struct GenPopLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "POP_LOCAL");
 		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
 		machine.locals.set(b, index, machine.stack.popInt64(b));
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		return true;
 	}
 };
 
@@ -499,10 +478,6 @@ template <OMR::Model::Mode M>
 class InstructionSetBase {
 public:
 	using MachineType = Machine<M>;
-
-	void initialize(JB::MethodBuilder* b) {}
-
-	void tearDown(JB::MethodBuilder* b) {}
 
 	Machine<M>& machine() { return *_machine; }
 
@@ -554,22 +529,21 @@ private:
 	std::shared_ptr<Machine<M>> _machine = nullptr;
 };
 
-class RealInstructionSet : public InstructionSetBase<Model::Mode::REAL> {
-public:
-	static constexpr Model::Mode M = Model::Mode::REAL;
-	using MachineType = Machine<M>;
+#if 0
 
-	void initialize(JB::MethodBuilder* b) {
-		InitializeMethod<Model::Mode::REAL>()(b);
+class InterpreterBuilder : public Model::InterpreterBuilder<InstructionSet<Model::Mode::REAL>> {
+public:
+	InterpreterBuilder(CompilerGlobals* globals)
+		: _globals(globals) {
+		OMR_TRACE();
+		JB::TypeDictionary* t = b->typeDictionary();
+		JitHelpers::define(b);
+		b->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
+		b->DefineParameter("target",      t->PointerTo(t->LookupStruct("Func")));
+		b->DefineReturnType(t->NoType);
 	}
 
-	void tearDown(JB::MethodBuilder* b) {}
-
-	Machine<M>& machine() { return *_machine; }
-
-	const Machine<M>& machine() const { return *_machine; }
-
-	void genEnterMethod(JB::MethodBuilder* b) {
+	virtual void buildEnterIL() override final {
 		GEN_TRACE_MSG(b, "ENTER METHOD");
 
 		JB::IlValue* interpreter = b->Load("interpreter");
@@ -583,16 +557,14 @@ public:
 
 		GEN_TRACE_MSG(b, "MACHINE INITIALIZED");
 		b->Call("interp_trace", 2, interpreter, target);
-		// _machine->initialize(b);
-
 	}
 
-	void genLeaveMethod(JB::MethodBuilder* b) {
-		GEN_TRACE_MSG(b, "$$$ EXIT METHOD");
+	virtual void buildLeaveIl() override final {
+			GEN_TRACE_MSG(b, "$$$ EXIT METHOD");
 	}
 
-	JB::IlValue* genDispatchValue(JB::IlBuilder* b, Machine<M>& machine) {
-		JB::TypeDictionary* t = b->typeDictionary();
+	virtual JB::IlValue* dispatch() {
+			JB::TypeDictionary* t = b->typeDictionary();
 
 		b->Call("print_s", 1, b->Const((void*)"$$$ DISPATCHING\n"));
 
@@ -609,94 +581,89 @@ public:
 		return target32;
 	}
 
-	void genDefaultHandler(JB::IlBuilder* b, Machine<M>& machine) {
-		GenDefault<M>()(b, machine);
-	}
-
-	template <typename HandlerTableT>
-	void genHandlers(HandlerTableT& table) {
-		table.create(std::uint32_t(Op::UNKNOWN),    GenError<M>());
-		table.create(std::uint32_t(Op::NOP),        GenNop<M>());
-		table.create(std::uint32_t(Op::HALT),       GenHalt<M>());
-		table.create(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
-		table.create(std::uint32_t(Op::ADD),        GenAdd<M>());
-		table.create(std::uint32_t(Op::PUSH_LOCAL), GenPushLocal<M>());
-		table.create(std::uint32_t(Op::POP_LOCAL),  GenPopLocal<M>());
-	}
-
 private:
-	std::shared_ptr<Machine<M>> _machine = nullptr;
+	CompilerGlobals* _globals;
 };
+#endif
 
-class VirtInstructionSet : public InstructionSetBase<Model::Mode::VIRT> {
 
-};
-
-class CompilerGlobals {
+class Compiler {
 public:
-	CompilerGlobals() :
+	using BytecodeHandlerTable = JB::BytecodeHandlerTable<Machine<Model::Mode::VIRT>>;
+
+	Compiler() :
 		_typedict() {
 		JitTypes::define(&_typedict);
+
+		constexpr Model::Mode M = Model::Mode::VIRT;
+
+		_handlers.set(std::uint32_t(Op::UNKNOWN),    GenError<M>());
+		_handlers.set(std::uint32_t(Op::NOP),        GenNop<M>());
+		_handlers.set(std::uint32_t(Op::HALT),       GenHalt<M>());
+		_handlers.set(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
+		_handlers.set(std::uint32_t(Op::ADD),        GenAdd<M>());
+		_handlers.set(std::uint32_t(Op::PUSH_LOCAL), GenPushLocal<M>());
+		_handlers.set(std::uint32_t(Op::POP_LOCAL),  GenPopLocal<M>());
 	}
 
 	JB::TypeDictionary* typedict() { return &_typedict; }
 
+	BytecodeHandlerTable* handlers() { return &_handlers; }
+
 private:
 	JB::TypeDictionary _typedict;
+	BytecodeHandlerTable _handlers;
 };
 
-class MethodBuilder : public Model::SpecMethodBuilder<VirtInstructionSet> {
+struct VirtMachineInterface {
+	using MachineType = Machine<Model::Mode::VIRT>;
+};
+
+class BytecodeMethodBuilder : public JB::BytecodeMethodBuilder {
 public:
-	MethodBuilder(Model::Compiler<VirtInstructionSet>& compiler, Func* target)
-		: Model::SpecMethodBuilder<VirtInstructionSet>(compiler), _func(target) {
+	BytecodeMethodBuilder(Compiler* compiler, Func* func)
+		: JB::BytecodeMethodBuilder(compiler->typedict(), compiler->handlers())
+		, _func(func) {
 
 		DefineName("compiled-method");
 		DefineLine("0");
 		DefineFile("<generated>");
 
-		InitializeMethod<Model::Mode::VIRT>()(this, _func);
+		OMR_TRACE();
+
+		// TODO RWY: In the virtual method entrance, the parameters _should be_ the function parameters
+		// Not the interpreter pointer or anything like that. The func address ought to be constant.
+		// The func address ought to be a constant, as well.
+
+		JB::TypeDictionary* t = this->typeDictionary();
+		JitHelpers::define(this);
+		this->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
+		this->DefineReturnType(t->NoType);
 	}
 
-	virtual std::shared_ptr<VirtMachine> initialize() override final {
+	virtual bool buildIL() override final {
+
 		OMR_TRACE();
 		VirtMachine::Factory factory;
 		factory.setInterpreter(Load("interpreter"));
 		factory.setFunction(Model::CUIntPtr::pack(std::uintptr_t(_func)));
-		factory.setData(data());
+		factory.setBuilders(builders());
 		std::shared_ptr<VirtMachine> machine(factory.create(this));
 		setVMState(machine.get());
-		return machine;
+
+		return buildBytecodeIL();
 	}
 
-	virtual bool buildIL() override final {
-		OMR_TRACE();
-		_machine = initialize();
-		setVMState(_machine.get());
-		AppendBuilder(data()->bcbuilders().get(this, 0));
-
-		std::int32_t index;
-		while((index = GetNextBytecodeFromWorklist()) != -1) {
-
-			std::uint8_t* pc = reinterpret_cast<std::uint8_t*>(_func->body + index);
-			std::uint8_t op = *pc;
-		
-			fprintf(stderr, "compiling index=%u opcode=%u\n", index, op);
-			OMR_TRACE();
-			handlers()[op](data()->bcbuilders().get(this, index), *_machine);
-		}
-
-		Return();
-	
-		return true;
+	virtual std::uint32_t getOpcode(std::size_t index) override final {
+		return std::uint32_t(_func->body[index]);
 	}
 
-	// virtual std::uint32_t dispatch(std::uintptr_t addr) {
-	// 	return GenDispatch()(this, machine)
-	// }
 private:
-	std::shared_ptr<VirtMachine> _machine;
 	Func* _func;
 };
+
+
+#if 0
 
 /// Create the interpret function.
 ///
@@ -712,10 +679,11 @@ void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpre
 	interpret(interpreter, target);
 }
 
-CompiledFn compile(Func* target) {
-	CompilerGlobals globals;
-	OMR::Model::Compiler<VirtInstructionSet> compiler(globals.typedict());
-	MethodBuilder builder(compiler, target);
+#endif
+
+CompiledFn compile(Func* func) {
+	Compiler compiler;
+	BytecodeMethodBuilder builder(&compiler, func);
 	void* result = nullptr;
 	std::int32_t rc = compileMethodBuilder(&builder, &result);
 	assert(rc == 0);

@@ -2,9 +2,10 @@
 #define OMR_MODEL_CONTROLFLOW_HPP_
 
 #include <OMR/Model/Mode.hpp>
-#include <OMR/SpecMethodBuilder.hpp>
 
 #include <BytecodeBuilder.hpp>
+
+#include <BytecodeBuilderTable.hpp>
 
 namespace OMR {
 namespace Model {
@@ -16,20 +17,21 @@ template <>
 class ControlFlow<Mode::REAL> {
 public:
 	ControlFlow() {}
+
+	void next(OMR_UNUSED JB::IlBuilder* b, OMR_UNUSED std::size_t index) {}
 };
 
 template <>
 class ControlFlow<Mode::VIRT> {
 public:
-	ControlFlow(MethodBuilderData* data)  :_data(data) {}
+	ControlFlow(JB::BytecodeBuilderTable* builders)  : _builders(builders) {}
 
-	void next(JB::IlBuilder* b, std::size_t target) {
-		JB::BytecodeBuilder* bb = static_cast<JB::BytecodeBuilder*>(b);
-		bb->AddFallThroughBuilder(_data->bcbuilders().get(bb, target));
+	void next(JB::BytecodeBuilder* b, std::size_t index) {
+		b->AddFallThroughBuilder(_builders->get(b, index));
 	}
 
 private:
-	MethodBuilderData* _data;
+	JB::BytecodeBuilderTable* _builders;
 };
 
 using VirtControlFlow = ControlFlow<Mode::VIRT>;

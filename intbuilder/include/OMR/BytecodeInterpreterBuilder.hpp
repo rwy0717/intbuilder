@@ -1,43 +1,48 @@
-#if !defined(OMR_MODEL_INTERPRETERBUILDER_HPP_)
-#define OMR_MODEL_INTERPRETERBUILDER_HPP_
+#if !defined(OMR_JITBUILDER_BYTECODEINTERPRETERBUILDER_HPP_)
+#define OMR_JITBUILDER_BYTECODEINTERPRETERBUILDER_HPP_
 
 #include <MethodBuilder.hpp>
 
 #include <cstdint>
 #include <cstddef>
 
-namespace OMR {
-namespace Model {
+///////////////////// TODO FIX TO REMOVE TEMPLATE PARAMETERS
+#if 0
 
-namespace JB = ::OMR::JitBuilder;
+namespace OMR {
+namespace JitBuilder {
 
 template <typename SpecT, typename MachineT = typename SpecT::MachineType>
-class InterpreterBuilder : public JB::MethodBuilder {
+class BytecodeInterpreterBuilder;
+
+template <typename SpecT, typename MachineT = typename SpecT::MachineType>
+class BytecodeHandlerTable {
 public:
-	class HandlerTable {
-	public:
-		HandlerTable(InterpreterBuilder* ib) :
-			_ib(ib) {}
+	BytecodeHandlerTable(BytecodeInterpreterBuilder* bcInterpreterBuilder)
+		: _bcInterpreterBuilder(BytecodeInterpreterBuilder) {}
 
-		template <typename GenerateT>
-		void create(std::uint32_t opcode, GenerateT&& generate) {
-			JB::IlBuilder* b = nullptr;
-			_cases.push_back(_ib->MakeCase(opcode, &b, false));
-			MachineT machine = _ib->spec().machine();
-			machine.reload(b);
-			generate(b, machine);
-			// machine.mergeInto(_ib.spec().machine());
-		}
+	template <typename GenerateT>
+	void create(std::uint32_t opcode, GenerateT&& generate) {
+		JB::IlBuilder* b = nullptr;
+		_cases.push_back(_ib->MakeCase(opcode, &b, false));
+		MachineT machine = _ib->spec().machine();
+		machine.reload(b);
+		generate(b, machine);
+		// machine.mergeInto(_ib.spec().machine());
+	}
 
-		std::vector<JB::IlBuilder::JBCase*>& cases() { return _cases; }
+	std::vector<JB::IlBuilder::JBCase*>& cases() { return _cases; }
 
-		const std::vector<JB::IlBuilder::JBCase*>& cases() const { return _cases; }
+	const std::vector<JB::IlBuilder::JBCase*>& cases() const { return _cases; }
 
-	private:
-		InterpreterBuilder* _ib;
-		std::vector<JB::IlBuilder::JBCase*> _cases;
-	};
+private:
+	InterpreterBuilder* _ib;
+	std::vector<JB::IlBuilder::JBCase*> _cases;
+};
 
+template <typename SpecT, typename MachineT = typename SpecT::MachineType>
+class BytecodeInterpreterBuilder : public MethodBuilder {
+public:
 	template <typename... Args>
 	InterpreterBuilder(JB::TypeDictionary* t, Args&&... args) :
 		JB::MethodBuilder(t),
@@ -120,7 +125,11 @@ private:
 	std::unique_ptr<MachineT> _machine = nullptr;
 };
 
-}  // namespace Model
+}  // namespace JitBuilder
 }  // namespace OMR
 
-#endif // OMR_MODEL_INTERPRETERBUILDER_HPP_
+
+#endif ///////////////////////////////// 0
+
+
+#endif // OMR_JITBUILDER_BYTECODEINTERPRETERBUILDER_HPP_

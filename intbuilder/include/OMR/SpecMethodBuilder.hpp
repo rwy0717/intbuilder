@@ -22,7 +22,6 @@ public:
 	using HandlerMap = std::map<std::uint32_t, GeneratorFn>;
 
 	Compiler(JB::TypeDictionary* typedict) : _typedict(typedict) {
-
 		_spec.genHandlers(*this);
 	}
 
@@ -38,9 +37,7 @@ public:
 
 	template <typename GenerateT>
 	void create(std::uint32_t opcode, GenerateT&& generate) {
-		assert(_handlers.count(opcode) == 0); // do not allow double inserts.
-		_handlers[opcode] = GeneratorFn(generate);
-		fprintf(stderr, "create handler bc=%x handler=%p\n", opcode, _handlers[opcode]. template target<void>());
+
 	}
 
 private:
@@ -59,21 +56,33 @@ private:
 };
 
 template <typename SpecT, typename MachineT = typename SpecT::MachineType>
-class SpecMethodBuilder : public JB::MethodBuilder {
+class BytecodeMethodBuilder : public JB::MethodBuilder {
 public:
 	using Compiler = Compiler<SpecT, MachineT>;
 
 	SpecMethodBuilder(Compiler& compiler)
 		: JB::MethodBuilder(compiler.typedict()), _compiler(compiler) {
-		
 	}
 
 	virtual bool buildIL() override {
-		// _compiler.spec().initialize(this);
-		// std::shared_ptr<MachineT> machine = initialize();
+		OMR_TRACE();
+		_machine = initialize();
+		setVMState(_machine.get());
+		AppendBuilder(data()->bcbuilders().get(this, 0));
 
-		// return false;
-		return false;
+		std::int32_t index;
+		while((index = GetNextBytecodeFromWorklist()) != -1) {
+
+			std::uint8_t* pc = reinterpret_cast<std::uint8_t*>(_func->body + index);
+			std::uint8_t op = *pc;
+		
+			fprintf(stderr, "compiling index=%u opcode=%u\n", index, op);
+			OMR_TRACE();
+			handlers()[op](data()->bcbuilders().get(this, index), *_machine);
+		}
+
+		Return();
+		return true;
 	}
 
 	virtual std::shared_ptr<MachineT> initialize() = 0;
@@ -87,6 +96,7 @@ public:
 private:
 	Compiler& _compiler;
 	MethodBuilderData _data;
+	std::function
 };
 
 }  // namespace Model

@@ -20,7 +20,7 @@ namespace Model {
 /// startPc
 class RealPc {
 public:
-	RealPc(OMR_UNUSED MethodBuilderData* data) : _pcReg(), _startPcReg() {}
+	RealPc(OMR_UNUSED JB::BytecodeBuilderTable* builders) : _pcReg(), _startPcReg() {}
 
 	RealPc(const RealPc& other) = default;
 
@@ -161,7 +161,7 @@ private:
 /// immediates and program decoding is collapsed to real constant values.
 class VirtPc {
 public:
-	VirtPc(MethodBuilderData* mbdata) : _pcReg(), _startPcReg(), _controlFlow(mbdata) {}
+	VirtPc(JB::BytecodeBuilderTable* builders) : _pcReg(), _startPcReg(), _controlFlow(builders) {}
 
 	CUInt64 immediateUInt64(JB::IlBuilder* b, CSize offset) {
 		return CUInt64(b, read<std::uint64_t>(offset.unpack()));
@@ -193,7 +193,7 @@ public:
 		b->Call("print_u", 1, b->Const((std::int64_t)index));
 	
 		_pcReg.store(b, CPtr<std::uint8_t>::pack(_pcReg.unpack() + offset.unpack()));
-		_controlFlow.next(b, index);
+		_controlFlow.next(static_cast<JB::BytecodeBuilder*>(b), index); /// RWY TODO: Get rid of dirty cast
 		
 	}
 
@@ -228,6 +228,10 @@ public:
 		_pcReg.mergeInto(b, dest._pcReg);
 		_startPcReg.mergeInto(b, dest._startPcReg);
 	}
+
+	VirtControlFlow* controlFlow() { return &_controlFlow; }
+
+	const VirtControlFlow* controlFlow() const { return &_controlFlow; }
 
 private:
 	template <typename T>
