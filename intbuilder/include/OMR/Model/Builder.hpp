@@ -16,60 +16,17 @@
 namespace OMR {
 namespace Model {
 
-template <Mode M>
-struct IlBuilderAlias;
-
-template <>
-struct IlBuilderAlias<Mode::REAL> : TypeAlias<JitBuilder::BytecodeBuilder> {};
-
-template <>
-struct IlBuilderAlias<Mode::VIRT> : TypeAlias<JitBuilder::IlBuilder> {};
+template <Mode M> struct IlBuilderAlias;
+template <> struct IlBuilderAlias<Mode::REAL> : TypeAlias<JitBuilder::IlBuilder> {};
+template <> struct IlBuilderAlias<Mode::VIRT> : TypeAlias<JitBuilder::BytecodeBuilder> {};
 
 template <Mode M>
 using IlBuilder = typename IlBuilderAlias<M>::Type;
 
-#if 0 ////////////////////////////////////////
-
-template <>
-class Builder<Mode::REAL> : public JitBuilder::IlBuilder {
-public:
-	explicit Builder(JitBuilder::IlBuilder* b) : _b(b) {}
-
-	JitBuilder::IlBuilder* operator->() const noexcept { return _b; }
-
-	JitBuilder::IlBuilder& operator*() const noexcept { return *_b; }
-
-	JitBuilder::TypeDictionary* typedict() { return _b->typeDictionary(); }
-
-	JitBuilder::IlBuilder* ilbuilder() const { return _b; }
-
-private:
-
-	template <typename T>
-	JitBuilder::IlType* ToIlType() { return typedict()->toIlType<T>(); }
-
-	JitBuilder::IlBuilder* _b;
-};
-
-template <>
-class Builder<Mode::VIRT> : public JitBuilder::BytecodeBuilder {
-public:
-	static Builder<Mode::VIRT> pack(JitBuilder::IlBuilder* b) {
-		return Builder(b);
-	}
-
-	JitBuilder::IlBuilder* unpack() const { return _b; }
-
-private:
-	explicit Builder(JitBuilder::IlBuilder* b) : _b(b) {}
-
-	JitBuilder::IlBuilder* _b;
-};
-
-
-
-using RealIlBuilder = IlBuilder<Mode::REAL>;
 using VirtIlBuilder = IlBuilder<Mode::VIRT>;
+using RealIlBuilder = IlBuilder<Mode::REAL>;
+
+#if 0 ////////////////////////////////////////
 
 template <typename T>
 JitBuilder::IlType* ilType(RBuilder b) {

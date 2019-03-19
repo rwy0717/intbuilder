@@ -322,7 +322,7 @@ struct GenFunctionEntry<Model::Mode::REAL> {
 
 template <>
 struct GenFunctionEntry<Model::Mode::VIRT> {
-	void operator()(JB::IlBuilder* b, VirtMachine& machine) {
+	void operator()(Model::VirtIlBuilder* b, VirtMachine& machine) {
 		OMR_TRACE();
 		/// RWY TODO: This function entry is unhandled.
 		b->Call("print_s", 1, b->Const((void*)nullptr)); // abort
@@ -331,16 +331,17 @@ struct GenFunctionEntry<Model::Mode::VIRT> {
 
 template <Model::Mode M>
 struct GenDefault {
-	void operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "DEFAULT HANDLER");
 		halt(b, machine);
+		return true;
 	}
 };
 
 template <Model::Mode M>
 struct GenError {
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ERROR (UNKNOWN BYTECODE)");
 		halt(b, machine);
@@ -350,7 +351,7 @@ struct GenError {
 
 template <Model::Mode M>
 struct GenHalt {
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "HALT");
 		halt(b, machine);
 		return true;
@@ -361,7 +362,7 @@ template <Model::Mode M>
 struct GenNop {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "NOP");
 		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
@@ -374,7 +375,7 @@ struct GenPushConst {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_CONST");
 		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
@@ -394,7 +395,7 @@ template <Model::Mode M>
 struct GenAdd {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ADD");
 		JB::IlValue* rhs = machine.stack.popInt64(b);
@@ -410,7 +411,7 @@ struct GenPushLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_LOCAL");
 		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
@@ -426,7 +427,7 @@ struct GenPopLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(JB::IlBuilder* b, Machine<M>& machine) {
+	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "POP_LOCAL");
 		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
@@ -442,7 +443,7 @@ struct BranchBuilder {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_TARGET_OFFSET = 1;
 
-	void build(Machine<M>& machine, JB::IlBuilder* b) {
+	void build(Machine<M>& machine, Model::IlBuilder<M>* b) {
 		Model::UInt<M> target = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_TARGET_OFFSET));
 		JB::IlValue* value = machine.locals.at(b, index);
 		machine.stack.push(b, value);
@@ -474,27 +475,63 @@ struct CallBuilder<Model::Mode::REAL> : CallBuilderBase {
 	}
 };
 
-template <OMR::Model::Mode M>
-class InstructionSetBase {
+class InterpreterCompiler {
 public:
-	using MachineType = Machine<M>;
+	static constexpr Model::Mode M = Model::Mode::REAL;
 
-	Machine<M>& machine() { return *_machine; }
+	using HandlerTable = JB::BytecodeInterpreterBuilder::HandlerTable<Machine<M>>;
 
-	const Machine<M>& machine() const { return *_machine; }
+	InterpreterCompiler() {
+		JitTypes::define(&_typedict);
+		set(Op::UNKNOWN,    GenError<M>());
+		set(Op::NOP,        GenNop<M>());
+		set(Op::HALT,       GenHalt<M>());
+		set(Op::PUSH_CONST, GenPushConst<M>());
+		set(Op::ADD,        GenAdd<M>());
+		set(Op::PUSH_LOCAL, GenPushLocal<M>());
+		set(Op::POP_LOCAL,  GenPopLocal<M>());
 
-	void genEnterMethod(JB::MethodBuilder* b) {}
-
-	void genLeaveMethod(JB::MethodBuilder* b) {
-		GEN_TRACE_MSG(b, "$$$ EXIT METHOD");
+		_handlers.setDefault(GenDefault<M>());
 	}
 
-	JB::IlValue* genDispatchValue(JB::IlBuilder* b, Machine<M>& machine) {
+	HandlerTable* handlers() { return &_handlers; }
+
+	const HandlerTable* handlers() const { return &_handlers; }
+
+	JB::TypeDictionary* typedict() { return &_typedict; }
+
+	const JB::TypeDictionary* typedict() const { return &_typedict; }
+
+private:
+	template <typename HandlerT>
+	void set(Op op, const HandlerT& handler) {
+		_handlers.set(std::uint32_t(op), handler);
+	}
+
+	JB::TypeDictionary _typedict;
+	HandlerTable _handlers;
+};
+
+class BytecodeInterpreterBuilder final : public JB::BytecodeInterpreterBuilder {
+public:
+	static constexpr Model::Mode M = Model::Mode::REAL;
+
+	BytecodeInterpreterBuilder(InterpreterCompiler* compiler)
+		: JB::BytecodeInterpreterBuilder(compiler->typedict(), compiler->handlers()) {
+		OMR_TRACE();
+		JB::TypeDictionary* t = typeDictionary();
+		JitHelpers::define(this);
+		DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
+		DefineParameter("target",      t->PointerTo(t->LookupStruct("Func")));
+		DefineReturnType(t->NoType);
+	}
+
+	virtual JB::IlValue* getOpcode(JB::IlBuilder* b) override {
 		JB::TypeDictionary* t = b->typeDictionary();
 
 		b->Call("print_s", 1, b->Const((void*)"$$$ DISPATCHING\n"));
 
-		JB::IlValue* target = GenDispatchValue<Model::Mode::REAL>()(b, machine).unpack();
+		JB::IlValue* target = GenDispatchValue<Model::Mode::REAL>()(b, *_machine).unpack();
 		JB::IlValue* target32 = b->ConvertTo(t->Int32, target);
 
 		b->Call("interp_trace", 2, b->Load("interpreter"), b->Load("target"));
@@ -507,103 +544,48 @@ public:
 		return target32;
 	}
 
-	void genDefaultHandler(JB::IlBuilder* b, Machine<M>& machine) {
-		GenDefault<M>()(b, machine);
-	}
+	virtual bool buildIL() override final {
+		GEN_TRACE_MSG(this, "ENTER METHOD");
 
-	template <typename HandlerTableT>
-	void genHandlers(HandlerTableT& table) {
-
-		fprintf(stderr, "creating handlers!\n");
-
-		table.create(std::uint32_t(Op::UNKNOWN),    GenError<M>());
-		table.create(std::uint32_t(Op::NOP),        GenNop<M>());
-		table.create(std::uint32_t(Op::HALT),       GenHalt<M>());
-		table.create(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
-		table.create(std::uint32_t(Op::ADD),        GenAdd<M>());
-		table.create(std::uint32_t(Op::PUSH_LOCAL), GenPushLocal<M>());
-		table.create(std::uint32_t(Op::POP_LOCAL),  GenPopLocal<M>());
-	}
-
-private:
-	std::shared_ptr<Machine<M>> _machine = nullptr;
-};
-
-#if 0
-
-class InterpreterBuilder : public Model::InterpreterBuilder<InstructionSet<Model::Mode::REAL>> {
-public:
-	InterpreterBuilder(CompilerGlobals* globals)
-		: _globals(globals) {
-		OMR_TRACE();
-		JB::TypeDictionary* t = b->typeDictionary();
-		JitHelpers::define(b);
-		b->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
-		b->DefineParameter("target",      t->PointerTo(t->LookupStruct("Func")));
-		b->DefineReturnType(t->NoType);
-	}
-
-	virtual void buildEnterIL() override final {
-		GEN_TRACE_MSG(b, "ENTER METHOD");
-
-		JB::IlValue* interpreter = b->Load("interpreter");
-		JB::IlValue* target = b->Load("target");
+		JB::IlValue* interpreter = Load("interpreter");
+		JB::IlValue* target = Load("target");
 
 		Machine<M>::Factory factory;
 		factory.setInterpreter(interpreter);
 		factory.setFunction(Model::RUIntPtr::pack(target));
-		_machine = std::shared_ptr<Machine<M>>(factory.create(b));
-		_machine->commit(b);
+		_machine.reset(factory.create(this));
+		_machine->commit(this);
 
-		GEN_TRACE_MSG(b, "MACHINE INITIALIZED");
-		b->Call("interp_trace", 2, interpreter, target);
-	}
+		GEN_TRACE_MSG(this, "$$$ MACHINE INITIALIZED");
+		Call("interp_trace", 2, interpreter, target);
 
-	virtual void buildLeaveIl() override final {
-			GEN_TRACE_MSG(b, "$$$ EXIT METHOD");
-	}
+		bool success = buildInterpreterIL(_machine.get()); // dispatch to superclass
 
-	virtual JB::IlValue* dispatch() {
-			JB::TypeDictionary* t = b->typeDictionary();
-
-		b->Call("print_s", 1, b->Const((void*)"$$$ DISPATCHING\n"));
-
-		JB::IlValue* target = GenDispatchValue<Model::Mode::REAL>()(b, machine).unpack();
-		JB::IlValue* target32 = b->ConvertTo(t->Int32, target);
-
-		b->Call("interp_trace", 2, b->Load("interpreter"), b->Load("target"));
-		b->Call("print_s", 1, b->Const((char*)"$$$ NEXT: next-bc="));
-		b->Call("print_x", 1, target);
-		b->Call("print_s", 1, b->Const((void*)"\n$$$ NEXT: dispatch: converted-next-bc="));
-		b->Call("print_x", 1, target32);
-		b->Call("print_s", 1, b->Const((void*)"\n"));
-
-		return target32;
+		GEN_TRACE_MSG(this, "$$$ EXIT METHOD");
+		Return();
+		return success;
 	}
 
 private:
-	CompilerGlobals* _globals;
+	std::unique_ptr<Machine<Model::Mode::REAL>> _machine;
 };
-#endif
 
-
-class Compiler {
+class MethodCompiler {
 public:
 	using BytecodeHandlerTable = JB::BytecodeHandlerTable<Machine<Model::Mode::VIRT>>;
 
-	Compiler() :
-		_typedict() {
+	MethodCompiler() : _typedict() {
 		JitTypes::define(&_typedict);
 
 		constexpr Model::Mode M = Model::Mode::VIRT;
 
-		_handlers.set(std::uint32_t(Op::UNKNOWN),    GenError<M>());
-		_handlers.set(std::uint32_t(Op::NOP),        GenNop<M>());
-		_handlers.set(std::uint32_t(Op::HALT),       GenHalt<M>());
-		_handlers.set(std::uint32_t(Op::PUSH_CONST), GenPushConst<M>());
-		_handlers.set(std::uint32_t(Op::ADD),        GenAdd<M>());
-		_handlers.set(std::uint32_t(Op::PUSH_LOCAL), GenPushLocal<M>());
-		_handlers.set(std::uint32_t(Op::POP_LOCAL),  GenPopLocal<M>());
+		set(Op::UNKNOWN,    GenError<M>());
+		set(Op::NOP,        GenNop<M>());
+		set(Op::HALT,       GenHalt<M>());
+		set(Op::PUSH_CONST, GenPushConst<M>());
+		set(Op::ADD,        GenAdd<M>());
+		set(Op::PUSH_LOCAL, GenPushLocal<M>());
+		set(Op::POP_LOCAL,  GenPopLocal<M>());
 	}
 
 	JB::TypeDictionary* typedict() { return &_typedict; }
@@ -611,17 +593,19 @@ public:
 	BytecodeHandlerTable* handlers() { return &_handlers; }
 
 private:
+
+	template <typename HandlerT>
+	void set(Op op, const HandlerT& handler) {
+		_handlers.set(std::uint32_t(op), handler);
+	}
+
 	JB::TypeDictionary _typedict;
 	BytecodeHandlerTable _handlers;
 };
 
-struct VirtMachineInterface {
-	using MachineType = Machine<Model::Mode::VIRT>;
-};
-
 class BytecodeMethodBuilder : public JB::BytecodeMethodBuilder {
 public:
-	BytecodeMethodBuilder(Compiler* compiler, Func* func)
+	BytecodeMethodBuilder(MethodCompiler* compiler, Func* func)
 		: JB::BytecodeMethodBuilder(compiler->typedict(), compiler->handlers())
 		, _func(func) {
 
@@ -631,14 +615,14 @@ public:
 
 		OMR_TRACE();
 
-		// TODO RWY: In the virtual method entrance, the parameters _should be_ the function parameters
-		// Not the interpreter pointer or anything like that. The func address ought to be constant.
-		// The func address ought to be a constant, as well.
-
 		JB::TypeDictionary* t = this->typeDictionary();
 		JitHelpers::define(this);
-		this->DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
-		this->DefineReturnType(t->NoType);
+		DefineParameter("interpreter", t->PointerTo(t->LookupStruct("Interpreter")));
+		DefineReturnType(t->NoType);
+	}
+
+	virtual std::uint32_t getOpcode(std::size_t index) override final {
+		return std::uint32_t(_func->body[index]);
 	}
 
 	virtual bool buildIL() override final {
@@ -654,22 +638,15 @@ public:
 		return buildBytecodeIL();
 	}
 
-	virtual std::uint32_t getOpcode(std::size_t index) override final {
-		return std::uint32_t(_func->body[index]);
-	}
-
 private:
 	Func* _func;
 };
 
-
-#if 0
-
 /// Create the interpret function.
 ///
 InterpretFn buildInterpret() {
-	CompilerGlobals globals;
-	OMR::Model::InterpreterBuilder<RealInstructionSet> builder(globals.typedict());
+	InterpreterCompiler compiler;
+	BytecodeInterpreterBuilder builder(&compiler);
 	void* interpret = nullptr;
 	std::int32_t rc = compileMethodBuilder(&builder, &interpret);
 	return (InterpretFn)interpret;
@@ -679,10 +656,8 @@ void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpre
 	interpret(interpreter, target);
 }
 
-#endif
-
 CompiledFn compile(Func* func) {
-	Compiler compiler;
+	MethodCompiler compiler;
 	BytecodeMethodBuilder builder(&compiler, func);
 	void* result = nullptr;
 	std::int32_t rc = compileMethodBuilder(&builder, &result);
@@ -769,7 +744,7 @@ Func* MakePopThenPushToLocalFunction() {
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
 
-#if 1
+#if 0
 	Interpreter interpreter;
 	Func* target = MakePopThenPushToLocalFunction();
 	CompiledFn cfunc = compile(target);
