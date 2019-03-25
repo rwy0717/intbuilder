@@ -3,6 +3,7 @@
 
 #include <MethodBuilder.hpp>
 #include <VirtualMachineState.hpp>
+#include <TypeDictionary.hpp>
 
 #include <cstdint>
 #include <cstddef>
@@ -136,7 +137,6 @@ private:
 		VirtualMachineState* copy = state->MakeCopy();
 		copy->Reload(b);
 		_handlers->getDefault()->invoke(b, copy);
-		// copy->Commit(b);
 		delete copy;
 		return b;
 	}
@@ -149,7 +149,6 @@ private:
 			VirtualMachineState* copy = state->MakeCopy();
 			copy->Reload(b);
 			node.second->invoke(b, copy);
-			// copy->Commit(b);
 			delete copy;
 		}
 		return cases;

@@ -20,7 +20,10 @@ public:
 	VirtOperandStack() :
 		_etype(nullptr), _ptype(nullptr), _sp(), _values() {}
 
-	VirtOperandStack(const VirtOperandStack&) = default;
+	VirtOperandStack(const VirtOperandStack& other)
+		: _etype(other._etype), _ptype(other._ptype), _sp(other._sp), _values(other._values) {
+		fprintf(stderr, "@@@ VIRT OPERAND STACK COPY depth=%u\n", _values.size());
+	}
 
 	void initialize(JB::IlBuilder* b, JB::IlType* etype, JB::IlValue* address) {
 		JB::TypeDictionary* t = b->typeDictionary();
@@ -30,9 +33,21 @@ public:
 	}
 
 	void commit(JB::IlBuilder* b) {
+		b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: commit\n"));
+
 		JB::IlValue* ptr = b->Sub(_sp.load(b), b->Const(8)); // Roll SP down to first slot.
 		for(std::size_t i = 0; i < _values.size(); ++i) {
-			b->StoreAt(b->IndexAt(_ptype, ptr, b->Const(0 - (std::int64_t)i)), _values[i]);
+
+			auto tgt = b->IndexAt(_ptype, ptr, b->Const(0 - (std::int64_t)i));
+			auto val = _values[i];
+
+			b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: commit: store: addr="));
+			b->Call("print_x", 1, tgt);
+			b->Call("print_s", 1, b->Const((void*)" val="));
+			b->Call("print_u", 1, val);
+			b->Call("print_s", 1, b->Const((void*)"\n"));
+
+			b->StoreAt(tgt, val);
 		}
 		_sp.commit(b);
 	}
@@ -50,6 +65,9 @@ public:
 	}
 
 	void mergeInto(JB::IlBuilder* b, VirtOperandStack& dest) {
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: merge into X\n"));
+
 		_sp.mergeInto(b, dest._sp);
 
 		assert(dest._values.size() == _values.size());

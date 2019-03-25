@@ -83,7 +83,7 @@ void JitHelpers::define(JB::MethodBuilder* b) {
 		t->Int32
 	);
 
-	defhelper(b, "print_u", print_x, t->NoType,
+	defhelper(b, "print_u", print_u, t->NoType,
 		t->Int32
 	);
 

@@ -35,6 +35,21 @@ template <> struct RemoveUnsigned<std::uint32_t> : TypeAlias<std::int32_t> {};
 template <> struct RemoveUnsigned<std::uint64_t> : TypeAlias<std::int64_t> {};
 template <> struct RemoveUnsigned<unsigned long> : TypeAlias<std::int64_t> {};
 
+
+template <typename T> struct IsUnsigned : FalseConstant {};
+template <> struct IsUnsigned<unsigned char> : TrueConstant {};
+template <> struct IsUnsigned<unsigned short> : TrueConstant {};
+template <> struct IsUnsigned<unsigned int> : TrueConstant {};
+template <> struct IsUnsigned<unsigned long> : TrueConstant {};
+template <> struct IsUnsigned<unsigned long long> : TrueConstant {};
+
+template <typename T> struct IsSigned : FalseConstant {};
+template <> struct IsUnsigned<signed char> : TrueConstant {};
+template <> struct IsUnsigned<signed short> : TrueConstant {};
+template <> struct IsUnsigned<signed int> : TrueConstant {};
+template <> struct IsUnsigned<signed long> : TrueConstant {};
+template <> struct IsUnsigned<signed long long> : TrueConstant {};
+
 } // namespace OMR
 
 #define OMR_UNUSED __attribute__((unused))

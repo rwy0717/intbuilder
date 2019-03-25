@@ -50,6 +50,8 @@ class VirtRegister {
 public:
 	VirtRegister() : _type(nullptr), _ptype(nullptr), _address(nullptr), _value(nullptr) {}
 
+	VirtRegister(const VirtRegister& other) = default;
+
 	JB::IlValue* load(JB::IlBuilder* b) { return _value; }
 
 	void store(JB::IlBuilder* b, JB::IlValue* value) { _value = value; }

@@ -3,13 +3,6 @@
 
 //////////////////////////////////
 
-#include <OMR/Model/Value.hpp>
-#include <OMR/Model/OperandStack.hpp>
-#include <OMR/Model/OperandArray.hpp>
-#include <OMR/Model/Register.hpp>
-#include <OMR/Model/Pc.hpp>
-#include <OMR/Model/Builder.hpp>
-
 #include <OMR/BytecodeInterpreterBuilder.hpp>
 #include <OMR/BytecodeMethodBuilder.hpp>
 
@@ -22,265 +15,22 @@
 #include "JitHelpers.hpp"
 #include "JitTypes.hpp"
 #include "Interpreter.hpp"
+#include "Model.hpp"
 
 #include <cstdint>
 #include <cassert>
 #include <memory>
 
-namespace Model = OMR::Model;
-namespace JB = OMR::JitBuilder;
-
-/// Wrapper for accessing Func structures through the machine model.
-/// Note that this is not the FP in the interpreter, it models the function data itself.
-/// In Mode::VIRT, the func is static data used by the compiler.
-/// In Mode::REAL, the func is read by the interpreter at run-time.
-template <Model::Mode M>
-class ModelFunc;
-
-template <>
-class ModelFunc<Model::Mode::VIRT> {
-public:
-	ModelFunc() : _function(nullptr) {}
-
-	void initialize(OMR_UNUSED JB::IlBuilder* b, Model::CUIntPtr function) {
-		// TODO: suppport RPtr<Func> rather than the unsafe RUIntPtr.
-		_function = reinterpret_cast<Func*>(function.unpack());
-	}
-
-	Model::CSize nlocals(OMR_UNUSED JB::IlBuilder* b) {
-		return Model::CSize::pack(_function->nlocals);
-	}
-
-	Model::CSize nparams(OMR_UNUSED JB::IlBuilder* b) {
-		return Model::CSize::pack(_function->nparams);
-	}
-
-	Model::CPtr<std::uint8_t> body(OMR_UNUSED JB::IlBuilder* b) {
-		return Model::CPtr<std::uint8_t>::pack(
-			_function->body
-		);
-	}
-
-	Model::CValue<CompiledFn> cbody(OMR_UNUSED JB::IlBuilder* b) {
-		return Model::CValue<CompiledFn>::pack(_function->cbody);
-	}
-
-	Func* unpack() { return _function; }
-
-	void commit(JB::IlBuilder* b) {}
-
-	void mergeInto(JB::IlBuilder* b, ModelFunc<Model::Mode::VIRT>& dest) {}
-
-private:
-	Func* _function;
-};
-
-template <>
-class ModelFunc<Model::Mode::REAL> {
-public:
-	ModelFunc() : _address(nullptr) {}
-
-	/// clone constructor
-	ModelFunc(JB::IlBuilder* b, const ModelFunc<Model::Mode::REAL>& other)
-		: _address(b->Copy(other._address)) {}
-
-	void initialize(OMR_UNUSED JB::IlBuilder* b, Model::RUIntPtr function) {
-		_address = function.unpack();
-	}
-
-	Model::RValue<CompiledFn> cbody(JB::IlBuilder* b) {
-		return Model::RValue<CompiledFn>::pack(
-			b->LoadIndirect("Func", "cbody", _address)
-		);
-	}
-
-	Model::RSize nparams(JB::IlBuilder* b) {
-		return Model::RSize::pack(
-			b->LoadIndirect("Func", "nparams", _address)
-		);
-	}
-
-	Model::RSize nlocals(JB::IlBuilder* b) {
-		return Model::RSize::pack(
-			b->LoadIndirect("Func", "nlocals", _address)
-		);
-	}
-
-	Model::RPtr<std::uint8_t> body(JB::IlBuilder* b) {
-		return Model::RPtr<std::uint8_t>::pack(
-			b->StructFieldInstanceAddress("Func", "body", _address)
-		);
-	}
-
-	JB::IlValue* unpack() { return _address; }
-
-	void commit(JB::IlBuilder* b) {}
-
-	void mergeInto(JB::IlBuilder* b, ModelFunc<Model::Mode::REAL>& dest) {}
-
-	void reload(JB::IlBuilder* b) {}
-
-private:
-	JB::IlValue* _address;
-};
-
-/* RWY TODO: inherit from OMR::Model::Machine<M> */ 
-template <Model::Mode M>
-class Machine final : public JB::VirtualMachineState {
-public:
-	class Factory {
-	public:
-		void setInterpreter(JB::IlValue* interpreter) { _interpreter = interpreter; }
-
-		void setFunction(Model::UIntPtr<M> function) { _function = function; }
-
-		void setBuilders(JB::BytecodeBuilderTable* builders) { _builders = builders; }
-
-		Machine<M>* create(JB::IlBuilder* b) {
-
-			JB::TypeDictionary* t = b->typeDictionary();
-
-			assert(_interpreter != nullptr);
-			// TODO: assert(_function != nullptr);
-	
-			Machine<M>* machine = new Machine<M>(_builders);
-
-			JB::IlValue* pcAddr      = b->StructFieldInstanceAddress("Interpreter", "_pc",      _interpreter);
-			JB::IlValue* spAddr      = b->StructFieldInstanceAddress("Interpreter", "_sp",      _interpreter);
-			JB::IlValue* fpAddr      = b->StructFieldInstanceAddress("Interpreter", "_fp",      _interpreter);
-			JB::IlValue* startPcAddr = b->StructFieldInstanceAddress("Interpreter", "_startpc", _interpreter);
-
-			machine->function.initialize(b, _function);
-			machine->stack.initialize(b, t->Int64, spAddr);
-
-			Model::Size<M> nlocals = machine->function.nlocals(b);
-			JB::IlValue* localsAddr = machine->stack.reserve64(b, nlocals);
-			machine->locals.initialize(b, t->Int64, localsAddr, nlocals);
-
-			machine->pc.initialize(b, pcAddr, startPcAddr, machine->function.body(b));
-
-			return machine;
-		}
-
-	private:
-		JB::IlValue* _interpreter = nullptr;
-		Model::UIntPtr<M> _function;
-		JB::BytecodeBuilderTable* _builders = nullptr;
-	};
-
-	Machine(JB::BytecodeBuilderTable* builders) : pc(builders) {}
-
-	Machine(const Machine&) = default;
-
-	Machine(Machine&&) = default;
-
-	void commit(JB::IlBuilder* b) {
-		function.commit(b);
-		stack.commit(b);
-		locals.commit(b);
-		pc.commit(b);
-	}
-
-	void mergeInto(JB::IlBuilder* b, Machine<M>& dest) {
-		function.mergeInto(b, dest.function);
-		stack.mergeInto(b, dest.stack);
-		locals.mergeInto(b, dest.locals);
-		pc.mergeInto(b, dest.pc);
-	}
-
-	void reload(JB::IlBuilder* b) {
-		function.reload(b);
-		stack.reload(b);
-		pc.reload(b);
-	}
-
-	/// @group VirtualMachineState implementation
-	/// @{
-
-	virtual void Commit(JB::IlBuilder* b) override final {
-		commit(b);
-	}
-
-	virtual void MergeInto(JB::VirtualMachineState* dest, JB::IlBuilder* b) override final {
-		mergeInto(b, *reinterpret_cast<Machine<M>*>(dest));
-	}
-
-	virtual JB::VirtualMachineState* MakeCopy() override final {
-		return new Machine<M>(*this);
-	}
-
-	/// @}
-	///
-
-	ModelFunc<M> function;
-	Model::OperandStack<M> stack;
-	Model::OperandArray<M> locals;
-	Model::Pc<M> pc;
-
-private:
-	friend class Factory;
-
-	Machine() {}
-};
-
-using RealMachine = Machine<Model::Mode::REAL>;
-using VirtMachine = Machine<Model::Mode::VIRT>;
-
-template <Model::Mode M>
-struct GenDispatchValue;
-
-template <>
-struct GenDispatchValue<Model::Mode::REAL> {
-	Model::RUIntPtr operator()(JB::IlBuilder* b, RealMachine& machine) {
-		return Model::RUIntPtr::pack(
-			b->LoadAt(b->typeDictionary()->pInt8,
-				machine.pc.load(b).unpack()
-		));
-	}
-};
-
-template <>
-struct GenDispatchValue<Model::Mode::VIRT> {
-	Model::CUIntPtr operator()(JB::IlBuilder* b, VirtMachine& machine) {
-		// translate pc to bytecode index.
-		return Model::CUIntPtr::pack(
-			static_cast<std::uintptr_t>(
-				*reinterpret_cast<std::uint8_t*>(machine.pc.load(b).unpack())));
-	}
-};
-
-void next(JB::IlBuilder* b, RealMachine& machine, Model::RSize offset) {
-	JB::TypeDictionary* t = b->typeDictionary();
-	machine.pc.next(b, offset);
-	machine.commit(b);
-}
-
-void next(JB::IlBuilder* b, VirtMachine& machine, Model::CSize offset) {
-	JB::TypeDictionary* t = b->typeDictionary();
-	machine.pc.next(b, offset);
-	machine.commit(b);
-}
-
-void halt(JB::IlBuilder* b, RealMachine& machine) {
-	b->Call("print_s", 1, b->Const((void*)"HALT\n"));
-	machine.commit(b);
-	b->Return();
-}
-
-void halt(JB::IlBuilder* b, VirtMachine& machine) {
-	b->Call("print_s", 1, b->Const((void*)"HALT\n"));
-	machine.commit(b);
-	b->Return();
-}
+#define INT_ENABLED
+#define JIT_ENABLED
 
 void gen_dbg_msg(JB::IlBuilder* b, const char* file, std::size_t line, const char* func, const char* msg) {
 	b->Call("dbg_msg", 4,
-		Model::constant(b, file),
-		Model::constant(b, line),
-		Model::constant(b, func),
-		Model::constant(b, msg)
+		OMR::Model::constant(b, file),
+		OMR::Model::constant(b, line),
+		OMR::Model::constant(b, func),
+		OMR::Model::constant(b, msg)
 	);
-	// b->Call("interp_trace", 2, b->Load("interpreter"), b->Load("target"));
 }
 
 #define GEN_DBG_MSG(b, msg) gen_dbg_msg(b, __FILE__, __LINE__, __FUNCTION__, msg)
@@ -289,12 +39,38 @@ void gen_dbg_msg(JB::IlBuilder* b, const char* file, std::size_t line, const cha
 
 #define GEN_TRACE(b) GEN_DBG_MSG(b, "trace")
 
-template <Model::Mode M>
-struct GenFunctionEntry;
+template <OMR::Model::Mode M>
+struct GenDispatchValue;
+
+#ifdef INT_ENABLED
+template <>
+struct GenDispatchValue<OMR::Model::Mode::REAL> {
+	OMR::Model::RUIntPtr operator()(JB::IlBuilder* b, Model::RealMachine& machine) {
+		return OMR::Model::RUIntPtr::pack(
+			b->LoadAt(b->typeDictionary()->pInt8,
+				machine.pc.load(b).unpack()
+		));
+	}
+};
+#endif // INT_ENABLED
 
 template <>
-struct GenFunctionEntry<Model::Mode::REAL> {
-	void operator()(JB::IlBuilder* b, RealMachine& machine) {
+struct GenDispatchValue<Model::Mode::VIRT> {
+	Model::CUIntPtr operator()(Model::CBuilder* b, Model::VirtMachine& machine) {
+		// translate pc to bytecode index.
+		return OMR::Model::CUIntPtr::pack(
+			static_cast<std::uintptr_t>(
+				*reinterpret_cast<std::uint8_t*>(machine.instruction.address(b).unpack())));
+	}
+};
+
+template <OMR::Model::Mode M>
+struct GenFunctionEntry;
+
+#ifdef INT_ENABLED
+template <>
+struct GenFunctionEntry<OMR::Model::Mode::REAL> {
+	void operator()(JB::IlBuilder* b, Model::RealMachine& machine) {
 		OMR_TRACE();
 		/// RWY TODO: Initializing the machine this late in the 
 		/// method / interpreter is too late. The Func model has to be available
@@ -307,10 +83,10 @@ struct GenFunctionEntry<Model::Mode::REAL> {
 
 		assert(0); // need to figure out how to initialize the machine
 #if 0
-		RealMachine::Factory factory;
+		Model::RealMachine::Factory factory;
 		factory.setInterpreter(interpreter);
-		factory.setFunction(Model::RUIntPtr::pack(target));
-		_machine = std::shared_ptr<Machine<M>>(factory.create(b));
+		factory.setFunction(OMR::Model::RUIntPtr::pack(target));
+		_machine = std::shared_ptr<Model::Machine<M>>(factory.create(b));
 		_machine->commit(b);
 #endif
 
@@ -319,19 +95,19 @@ struct GenFunctionEntry<Model::Mode::REAL> {
 		// _machine->initialize(b);
 	}
 };
+#endif // INT_ENABLED
 
 template <>
-struct GenFunctionEntry<Model::Mode::VIRT> {
-	void operator()(Model::VirtIlBuilder* b, VirtMachine& machine) {
+struct GenFunctionEntry<OMR::Model::Mode::VIRT> {
+	void operator()(OMR::Model::VirtIlBuilder* b, Model::VirtMachine& machine) {
 		OMR_TRACE();
-		/// RWY TODO: This function entry is unhandled.
-		b->Call("print_s", 1, b->Const((void*)nullptr)); // abort
+		GEN_TRACE_MSG(b, "FUNCTION ENTRY");
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenDefault {
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "DEFAULT HANDLER");
 		halt(b, machine);
@@ -339,9 +115,9 @@ struct GenDefault {
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenError {
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ERROR (UNKNOWN BYTECODE)");
 		halt(b, machine);
@@ -349,108 +125,130 @@ struct GenError {
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenHalt {
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	static constexpr std::size_t INSTR_SIZE = 1;
+
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "HALT");
 		halt(b, machine);
 		return true;
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenNop {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "NOP");
-		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenPushConst {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_CONST_OFFSET = 1;
 
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_CONST");
-		Model::Int64<M> c = machine.pc.immediateInt64(b, Model::Size<M>(b, INSTR_CONST_OFFSET));
 
-		b->Call("print_s", 1, b->Const((void*)"PushConstBuilder: build: value="));
+		JB::IlValue* address = machine.instruction.address(b).toIl(b);
+		JB::IlValue* index   = machine.instruction.index(b).toIl(b);
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ PUSH_CONST: pc="));
+		b->Call("print_x", 1, address);
+		b->Call("print_s", 1, b->Const((void*)" index="));
+		b->Call("print_u", 1, index);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		OMR::Model::Int64<M> c = machine.instruction.immediateInt64(b, {b, INSTR_CONST_OFFSET});
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ PUSH_CONST: const-value="));
 		b->Call("print_u", 1, c.toIl(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 
 		machine.stack.pushInt64(b, c.toIl(b));
 
-		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenAdd {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ADD");
 		JB::IlValue* rhs = machine.stack.popInt64(b);
 		JB::IlValue* lhs = machine.stack.popInt64(b);
 		machine.stack.pushInt64(b, b->Add(lhs, rhs));
-		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenPushLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_LOCAL");
-		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
+		OMR::Model::Size<M> index = machine.instruction.immediateSize(b, {b, INSTR_INDEX_OFFSET});
 		JB::IlValue* value = machine.locals.get(b, index);
 		machine.stack.pushInt64(b, value);
-		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
 
-template <Model::Mode M>
+template <OMR::Model::Mode M>
 struct GenPopLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(Model::IlBuilder<M>* b, Machine<M>& machine) {
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "POP_LOCAL");
-		Model::Size<M> index = machine.pc.immediateSize(b, Model::Size<M>(b, INSTR_INDEX_OFFSET));
+		OMR::Model::Size<M> index = machine.instruction.immediateSize(b, {b, INSTR_INDEX_OFFSET});
 		machine.locals.set(b, index, machine.stack.popInt64(b));
-		next(b, machine, Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
 
-#if 0
-template <Model::Mode M>
-struct BranchBuilder {
+template <OMR::Model::Mode M>
+struct GenBranchIf {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_TARGET_OFFSET = 1;
 
-	void build(Machine<M>& machine, Model::IlBuilder<M>* b) {
-		Model::UInt<M> target = machine.pc.immediateUInt(b, Model::UInt<M>(b, INSTR_TARGET_OFFSET));
-		JB::IlValue* value = machine.locals.at(b, index);
-		machine.stack.push(b, value);
-		// todo: machine.pc.next(b, Model::add(b, Model::Size<M>(b, INSTR_SIZE), target));
+	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+		OMR_TRACE();
+		GEN_TRACE_MSG(b, "BRANCH_IF");
+
+		auto addr = machine.instruction.address(b);
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ BRANCH_IF: pc="));
+		b->Call("print_x", 1, addr.toIl(b));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		OMR::Model::Int64<M> immediate = machine.instruction.immediateInt64(b, {b, INSTR_TARGET_OFFSET});
+		OMR::Model::Int64<M> offset = OMR::Model::add(b, immediate, OMR::Model::Int64<M>(b, INSTR_SIZE));
+		JB::IlValue* cond = machine.stack.popInt64(b);
+
+		ifCmpNotEqualZero(b, machine, cond, offset);
+		next(b, machine, {b, INSTR_SIZE});
+		return true;
 	}
 };
-#endif // 0
 
 struct CallBuilderBase {
 protected:
@@ -463,23 +261,27 @@ struct CallBuilder;
 
 template <>
 struct CallBuilder<Model::Mode::VIRT> : CallBuilderBase {
-	static void build(Machine<Model::Mode::VIRT>& machine, JB::IlBuilder* b) {
+	static void build(Model::Machine<Model::Mode::VIRT>& machine, JB::IlBuilder* b) {
 		// TODO! machine.pc.next(b, Model::CSize(b, INSTR_SIZE));
 	}
 };
 
+#ifdef INT_ENABLED
 template <>
 struct CallBuilder<Model::Mode::REAL> : CallBuilderBase {
-	void build(Machine<Model::Mode::REAL>& machine, JB::IlBuilder* b) {
+	void build(Model::Machine<Model::Mode::REAL>& machine, JB::IlBuilder* b) {
 		machine.pc.next(b, Model::RSize(b, INSTR_SIZE));
 	}
 };
+#endif // INT_ENABLED
+
+#ifdef INT_ENABLED
 
 class InterpreterCompiler {
 public:
 	static constexpr Model::Mode M = Model::Mode::REAL;
 
-	using HandlerTable = JB::BytecodeInterpreterBuilder::HandlerTable<Machine<M>>;
+	using HandlerTable = JB::BytecodeInterpreterBuilder::HandlerTable<Model::Machine<M>>;
 
 	InterpreterCompiler() {
 		JitTypes::define(&_typedict);
@@ -550,7 +352,7 @@ public:
 		JB::IlValue* interpreter = Load("interpreter");
 		JB::IlValue* target = Load("target");
 
-		Machine<M>::Factory factory;
+		Model::Machine<M>::Factory factory;
 		factory.setInterpreter(interpreter);
 		factory.setFunction(Model::RUIntPtr::pack(target));
 		_machine.reset(factory.create(this));
@@ -567,17 +369,22 @@ public:
 	}
 
 private:
-	std::unique_ptr<Machine<Model::Mode::REAL>> _machine;
+	std::unique_ptr<Model::Machine<Model::Mode::REAL>> _machine;
 };
+
+#endif // INT_ENABLED
+
+#ifdef JIT_ENABLED
 
 class MethodCompiler {
 public:
-	using BytecodeHandlerTable = JB::BytecodeHandlerTable<Machine<Model::Mode::VIRT>>;
+	static constexpr Model::Mode M = Model::Mode::VIRT;
 
-	MethodCompiler() : _typedict() {
+	using BytecodeHandlerTable = JB::BytecodeHandlerTable<Model::Machine<M>>;
+
+	MethodCompiler()
+		: _typedict() {
 		JitTypes::define(&_typedict);
-
-		constexpr Model::Mode M = Model::Mode::VIRT;
 
 		set(Op::UNKNOWN,    GenError<M>());
 		set(Op::NOP,        GenNop<M>());
@@ -586,6 +393,9 @@ public:
 		set(Op::ADD,        GenAdd<M>());
 		set(Op::PUSH_LOCAL, GenPushLocal<M>());
 		set(Op::POP_LOCAL,  GenPopLocal<M>());
+		set(Op::BRANCH_IF,  GenBranchIf<M>());
+
+		_handlers.setDefault(GenDefault<M>());
 	}
 
 	JB::TypeDictionary* typedict() { return &_typedict; }
@@ -628,20 +438,24 @@ public:
 	virtual bool buildIL() override final {
 
 		OMR_TRACE();
-		VirtMachine::Factory factory;
+
+		Model::VirtMachine::Factory factory;
 		factory.setInterpreter(Load("interpreter"));
-		factory.setFunction(Model::CUIntPtr::pack(std::uintptr_t(_func)));
+		factory.setFunction(Model::CPtr<Func>::pack(_func));
 		factory.setBuilders(builders());
-		std::shared_ptr<VirtMachine> machine(factory.create(this));
+		std::shared_ptr<Model::VirtMachine> machine(factory.create(this));
 		setVMState(machine.get());
 
-		return buildBytecodeIL();
+		return buildBytecodeIL(/* machine.get(), _func */);
 	}
 
 private:
 	Func* _func;
 };
 
+#endif // JIT_ENABLED
+
+#ifdef INT_ENABLED
 /// Create the interpret function.
 ///
 InterpretFn buildInterpret() {
@@ -655,7 +469,9 @@ InterpretFn buildInterpret() {
 void interpret_wrap(Interpreter* interpreter, Func* target, InterpretFn interpret) {
 	interpret(interpreter, target);
 }
+#endif // INT_ENABLED
 
+#ifdef JIT_ENABLED
 CompiledFn compile(Func* func) {
 	MethodCompiler compiler;
 	BytecodeMethodBuilder builder(&compiler, func);
@@ -664,6 +480,7 @@ CompiledFn compile(Func* func) {
 	assert(rc == 0);
 	return (CompiledFn)result;
 }
+#endif // JIT_ENABLED
 
 /////////////////////////// Instruction Set
 
@@ -741,31 +558,52 @@ Func* MakePopThenPushToLocalFunction() {
 	return (Func*)buffer.release();
 }
 
+Func* MakeBranchIfTrueFunction() {
+	OMR::ByteBuffer buffer;
+	buffer << Func(0, 0);
+	buffer << Op::PUSH_CONST << std::int64_t(1);        // 00 + 1 + 8
+	buffer << Op::BRANCH_IF  << std::int64_t(12);       // 09 + 1 + 8
+	buffer << Op::PUSH_CONST << std::int64_t(0x7);      // 18 + 1 + 8
+	buffer << Op::HALT;                                 // 27 + 1
+	buffer << Op::HALT;                                 // 28 + 1
+	buffer << Op::HALT;                                 // 29 + 1
+	buffer << Op::PUSH_CONST << std::int64_t(0x8);      // 30 + 1 + 8
+	buffer << Op::HALT;                                 // 39 + 1
+	return (Func*)buffer.release();
+}
+
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
-
-#if 0
-	Interpreter interpreter;
-	Func* target = MakePopThenPushToLocalFunction();
-	CompiledFn cfunc = compile(target);
-	cfunc(&interpreter);
-	free(target);
-#else
-	InterpretFn interpret = buildInterpret();
-
-	Func* target = MakePopThenPushToLocalFunction();
+	Func* target = MakeBranchIfTrueFunction();
 	Interpreter interpreter;
 
-	fprintf(stderr, "int main: interpreter=%p\n", &interpreter);
-	fprintf(stderr, "int main: target=%p\n", target);
-	fprintf(stderr, "int main: target startpc=%p\n", &target->body[0]);
-	fprintf(stderr, "int main: initial op=%hhu\n", target->body[0]);
-	fprintf(stderr, "int main: initial sp=%p\n", interpreter.sp());
-	interpret_wrap(&interpreter, target, interpret);
+	fprintf(stderr, "@@@ int main: interpreter=%p\n", &interpreter);
+	fprintf(stderr, "@@@ int main: target=%p\n", target);
+	fprintf(stderr, "@@@ int main: target startpc=%p\n", &target->body[0]);
+	fprintf(stderr, "@@@ int main: initial op=%hhu\n", target->body[0]);
+	fprintf(stderr, "@@@ int main: initial sp=%p\n", interpreter.sp());
 
-	free(target);
+#ifdef JIT_ENABLED
+	{
+		fprintf(stderr, "!!! int main: compiling function\n");
+		CompiledFn cfunc = compile(target);
+		fprintf(stderr, "!!! int main: running compiled function\n");
+		cfunc(&interpreter);
+		fprintf(stderr, "!!! end of compiled function\n");
+		fprintf(stderr, "!!! int main: stack[0]=%llu\n", interpreter.peek(0));
+	}
 #endif
 
-	fprintf(stderr, "int main: stack[0]=%llu\n", interpreter.peek(0));
+#ifdef INT_ENABLED
+	{
+		fprintf(stderr, "!!! int main: compiling interpreter\n");
+		InterpretFn interpret = buildInterpret();
+		fprintf(stderr, "!!! int main: running interpreted function\n");
+		interpret_wrap(&interpreter, target, interpret);
+		fprintf(stderr, "!!! end of interpreted function\n");
+	}
+#endif
+
+	free(target);
 	return 0;
 }

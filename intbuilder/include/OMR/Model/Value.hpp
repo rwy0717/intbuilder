@@ -63,6 +63,8 @@ JB::IlValue* constant(JB::IlBuilder* b, T value) {
 	return Constant<T>()(b, value);
 }
 
+inline namespace ValueTypes {
+
 /// Modal value type. Values are either runtime or compile time.
 ///
 template <Mode M, typename T>
@@ -206,7 +208,7 @@ using CPtrDiff = CValue<std::ptrdiff_t>;
 /// @}
 ///
 
-
+}  // namespace ValueTypes
 }  // namespace Model
 }  // namespace OMR
 

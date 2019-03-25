@@ -1,8 +1,9 @@
 #if !defined(OMR_JITBUILDER_BYTECODEHANDLERTABLE_HPP_)
 #define OMR_JITBUILDER_BYTECODEHANDLERTABLE_HPP_
 
-#include <MethodBuilder.hpp>
 #include <BytecodeBuilder.hpp>
+#include <BytecodeBuilderTable.hpp>
+#include <MethodBuilder.hpp>
 
 #include <functional>
 #include <map>
@@ -25,9 +26,10 @@ public:
 
 	virtual ~BytecodeHandlerWrapper() override final {}
 
-	virtual bool invoke(JB::BytecodeBuilder* b) override final {
+	virtual bool invoke(BytecodeBuilder* b) override final {
 		VmStateT* state = static_cast<VmStateT*>(b->vmState());
 		assert(state != nullptr);
+		fprintf(stderr, "@@@ invoking bc-builder=%p vm-state=%p\n", b, state);
 		return _handler(b, *state);
 	}
 

@@ -21,7 +21,7 @@ public:
 		_length = length;
 	}
 
-	/// Load at un
+	/// Load at offset.
 	template <typename T>
 	Value<M, T> load(Builder<M> b, Size<M> offset) {
 		load(b, add(b, _addr, offset));

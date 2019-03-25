@@ -24,8 +24,19 @@ public:
 		std::int32_t index = -1;
 		while((index = GetNextBytecodeFromWorklist()) != -1) {
 			std::uint32_t opcode = getOpcode(index);
-			fprintf(stderr, "compiling index=%u opcode=%u\n", index, opcode);
-			bool success = _handlers->invoke(_builders.get(this, index), opcode);
+			BytecodeBuilder* builder = _builders.get(this, index);
+			assert(index == builder->bcIndex());
+
+			fprintf(stderr, "@@@ *** compiling index=%u opcode=%u\n", index, opcode);
+			fprintf(stderr, "@@@ *** compiling bc-builder=%p vm-state=%p\n", builder, builder->vmState());
+	
+			builder->Call("print_s", 1, builder->Const((void*)"$$$ *** START index="));
+			builder->Call("print_u", 1, builder->Const((std::int32_t)index));
+			builder->Call("print_s", 1, builder->Const((void*)" opcode="));
+			builder->Call("print_u", 1, builder->Const((std::int32_t)opcode));
+			builder->Call("print_s", 1, builder->Const((void*)"\n"));
+
+			bool success = _handlers->invoke(builder, opcode);
 			if (!success) {
 				return false;
 			}

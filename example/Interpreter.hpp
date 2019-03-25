@@ -13,7 +13,15 @@ class JitHelpers;
 struct Func;
 
 enum class Op : std::uint8_t {
-	UNKNOWN, HALT, NOP, PUSH_CONST, ADD, PUSH_LOCAL, POP_LOCAL, CALL,
+	UNKNOWN,
+	HALT,
+	NOP,
+	PUSH_CONST,
+	ADD,
+	PUSH_LOCAL,
+	POP_LOCAL,
+	BRANCH_IF,
+	CALL,
 	LAST = CALL
 };
 

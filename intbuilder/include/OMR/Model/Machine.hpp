@@ -22,6 +22,24 @@ private:
 	ControlFlow<M> _controlFlow;
 };
 
+template <Mode M>
+class Instruction;
+
+template <>
+class Instruction<Mode::REAL> {
+public:
+	RSize offset() {}
+
+	RUIntPtr address() {}
+};
+
+template <>
+class Instruction<Model::VIRT> {
+	CSize offset() {}
+
+	CUIntPtr address() {}
+};
+
 }  // namespace Model
 }  // namespace OMR
 
