@@ -22,6 +22,8 @@ private:
 	ControlFlow<M> _controlFlow;
 };
 
+#if 0
+// TODO RWY: Implement generic instruction/machine code
 template <Mode M>
 class Instruction;
 
@@ -39,6 +41,8 @@ class Instruction<Model::VIRT> {
 
 	CUIntPtr address() {}
 };
+#endif ///
+
 
 }  // namespace Model
 }  // namespace OMR

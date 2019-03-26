@@ -107,8 +107,10 @@ public:
 		Store("interpreter_opcode",   Const(std::int32_t(-1)));
 		Store("interpreter_continue", Const(std::int32_t(1)));
 
-		IlBuilder* loop = OrphanBuilder();
-		DoWhileLoop((char*)"interpreter_continue", &loop);
+		IlBuilder* loop = nullptr;
+		IlBuilder* br   = nullptr;
+		IlBuilder* cont = nullptr;
+		DoWhileLoop((char*)"interpreter_continue", &loop, &br, &cont);
 
 		// state->Reload(loop);
 		IlValue* opcode = getOpcode(loop);

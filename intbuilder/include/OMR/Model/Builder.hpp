@@ -39,6 +39,25 @@ JitBuilder::IlType* ilType(JitBuilder::IlBuilder* b) {
 	return b->typeDictionary()->toIlType<T>();
 }
 
+class IntBcBuilder : public JB::IlBuilder {
+public:
+	IntBcBuilder() {
+		_exit = OrphanBuilder();
+		_exit->Call("print_s", 1, _exit->ConstAddress((void*)"$$$ *** BC EXIT"));
+	}
+
+	void Exit() { Goto(ExitBuilder()); }
+
+	JB::IlBuilder* ExitBuilder() { return _exit; }
+
+	void End() {
+		AppendBuilder(_exit);
+	}
+
+private:
+	JB::IlBuilder* _exit;
+};
+
 #if 0
 template <typename T>
 EnableIf<!IsSigned<T>::VALUE, JitBuilder::IlValue*>::Type convert(IlBuilder* b, IlValue* value) {
@@ -65,6 +84,10 @@ CValue<T> add(JitBuilder::IlBuilder* b, CValue<U> lhs, RValue<U> rhs) {
 
 CInt64 add(JB::IlBuilder* b, CInt64 lhs, CInt64 rhs) {
 	return CInt64::pack(lhs.unpack() + rhs.unpack());
+}
+
+RInt64 add(JB::IlBuilder* b, RInt64 lhs, RInt64 rhs) {
+	return RInt64::pack(b->Add(lhs.unpack(), rhs.unpack()));
 }
 
 #if 0

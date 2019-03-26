@@ -2,29 +2,74 @@
 #define OMR_MODEL_CONTROLFLOW_HPP_
 
 #include <OMR/Model/Mode.hpp>
+#include <OMR/Model/FunctionData.hpp>
 
 #include <BytecodeBuilder.hpp>
-
 #include <BytecodeBuilderTable.hpp>
 
 namespace OMR {
 namespace Model {
 
+/// Interface to control flow operations.
+/// All targets are ABSOLUTE, not relative.
 template <Mode M>
 class ControlFlow;
 
 template <>
 class ControlFlow<Mode::REAL> {
 public:
-	void next(JB::IlBuilder* b, RSize offset) {
-		_pcReg.store(b, RPtr<std::uint8_t>::pack(
-			b->Add(
-				_pcReg.unpack(),
-				offset.unpack()
-		)));
-		b->Call("print_s", 1, b->Const((void*)"Pc updated: value="));
-		b->Call("print_u", 1, _pcReg.unpack());
+	ControlFlow(FunctionData<Mode::REAL>& data) : _data(data), _address(nullptr) {}
+
+	void initialize(JB::IlBuilder* b, JB::IlValue* address) {
+		_address = address;
+	}
+
+	void next(RBuilder* b, JB::IlValue* index) {
+		b->Call("print_s", 1, b->Const((void*)"$$$ ControlFlow next: index="));
+		b->Call("print_u", 1, index);
 		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		JB::TypeDictionary* t = b->typeDictionary();
+		JB::IlType* type = t->PointerTo(t->Int8);
+
+		b->StoreAt(_address, b->Add(base(), index));
+	}
+
+	/// absolute control flow.
+	void IfCmpNotEqualZero(RBuilder* b, JB::IlValue* cond, JB::IlValue* index) {
+
+		b->Call("print_s", 1, b->Const((void*)"$$$ ControlFlow IfCmpNotEqualZero: cond= offset="));
+		b->Call("print_u", 1, index);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+
+		JB::TypeDictionary* t = b->typeDictionary();
+		JB::IlType* type = t->PointerTo(t->Int8);
+
+		JB::IlBuilder* onTrue = nullptr;
+		JB::IlBuilder* mergePoint = b->OrphanBuilder();
+
+		b->IfCmpNotEqualZero(&onTrue, cond);
+		b->Goto(mergePoint);
+		onTrue->Call("print_s", 1, onTrue->Const((void*)"$$$ ON TRUE TAKEN !!! \n"));
+		onTrue->Goto(mergePoint);
+		b->AppendBuilder(onTrue);
+		b->AppendBuilder(mergePoint);
+		mergePoint->Return();
+		// b->Goto(x);
+#if 0
+		b->IfCmpNotEqualZero(&onTrue, cond);
+		b->Goto(mergePoint);
+
+
+		onTrue->StoreAt(_address, onTrue->IndexAt(type, base(), index));
+
+		b->Goto(mergePoint);
+		mergePoint->Call("print_s", 1, mergePoint->Const((void*)"$$$ MWERGEPOIINTS !!! \n"));
+
+		b->AppendBuilder(onTrue);
+		b->AppendBuilder(mergePoint);
+		mergePoint->Call("print_s", 1, mergePoint->Const((void*)"$$$ MWERGEPOIINTS !!! \n"));
+#endif
 	}
 
 	void halt(JB::IlBuilder* b) {
@@ -35,32 +80,50 @@ public:
 		b->Return(result);
 	}
 
-	void halt(JB::IlBuilder* b) {
-		b->Return();
-	}
+private:
+	JB::IlValue* base() const { return _data.start(); }
+
+	const FunctionData<Mode::REAL>& _data;
+	JB::IlValue* _address;
 };
 
 template <>
 class ControlFlow<Mode::VIRT> {
 public:
-	ControlFlow(JB::BytecodeBuilderTable* builders)  : _builders(builders) {}
+	ControlFlow(FunctionData<Mode::VIRT>& data) : _address(nullptr), _data(data) {}
 
 	std::uintptr_t index(JB::BytecodeBuilder* b) const { return b->bcIndex(); }
 
-	void next(JB::BytecodeBuilder* b, std::size_t index) {
-		fprintf(stderr, "@@@ control-flow: NEXT bc-index:=%u target-bc-index=%zu\n", b->bcIndex(), index);
-		b->AddFallThroughBuilder(_builders->get(b, index));
+	void initialize(JB::IlBuilder* b, JB::IlValue* address)  {
+		_address = address;
 	}
 
+	void next(JB::BytecodeBuilder* b, std::size_t index) {
+		fprintf(stderr, "@@@ control-flow: NEXT bc-index:=%u target-bc-index=%zu\n", b->bcIndex(), index);
+		b->AddFallThroughBuilder(builders()->get(b, index));
+	}
+
+	/// absolute control flow.
 	void IfCmpNotEqualZero(JB::BytecodeBuilder* b, JB::IlValue* cond, std::size_t index) {
 		fprintf(stderr, "@@@ control-flow: IF_NOT_ZERO: bc-index:=%u target-bc-index=%zu\n", b->bcIndex(), index);
 		b->IfCmpNotEqualZero(builders()->get(b, index), cond);
 	}
 
-	JB::BytecodeBuilderTable* builders() { return _builders; }
+	void halt(JB::IlBuilder* b) {
+		b->Return();
+	}
+
+	void halt(JB::IlBuilder* b, JB::IlValue* result) {
+		b->Return(result);
+	}
 
 private:
-	JB::BytecodeBuilderTable* _builders;
+	JB::BytecodeBuilderTable* builders() const { return data().builders(); }
+
+	const FunctionData<Mode::VIRT>& data() const { return _data; }
+
+	const FunctionData<Mode::VIRT>& _data;
+	JB::IlValue* _address;
 };
 
 using VirtControlFlow = ControlFlow<Mode::VIRT>;

@@ -21,70 +21,64 @@ namespace Model {
 /// startPc
 class RealPc {
 public:
-	RealPc() : _address(nullptr), _base(nullptr), _value(nullptr) {}
+	RealPc() : _ptype(nullptr), _address(nullptr), _base(nullptr) {}
 
 	RealPc(const RealPc& other) = default;
 
 	RealPc(RealPc&& other) = default;
 
 	/// Set up the function pointer.
-	void initialize(JB::IlBuilder* b, JB::IlValue* pcAddress, JB::IlValue* startPcAddress, RPtr<std::uint8_t> value) {
-
-		JB::TypeDictionary* t = b->typeDictionary();
-		JB::IlType* type = t->toIlType<std::uint8_t*>();
-
+	void initialize(RBuilder* b, JB::IlValue* address, RPtr<std::uint8_t> value) {
+		_ptype = b->typeDictionary()->toIlType<std::uint8_t**>();
+		_address = address;
+		_base = value.unpack();
+		b->StoreAt(_address, _base);
 		b->Call("print_s", 1, b->Const((void*)"$$$ RealPc initialize value="));
-		b->Call("print_x", 1, value.toIl(b));
+		b->Call("print_x", 1, load(b).unpack());
 		b->Call("print_s", 1, b->Const((void*)"\n"));
-
-		_pc.initialize(b, type, pcAddress);
-		_startpc.initialize(b, type, startPcAddress);
 	}
 
-	/// @group State Queries
+	RPtr<std::uint8_t> load(RBuilder* b) const {
+		JB::IlValue* value = b->LoadAt(_ptype, _address);
+		b->Call("print_s", 1, b->Const((void*)"Pc loading: value="));
+		b->Call("print_x", 1, value);
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+		return RPtr<std::uint8_t>::pack(value);
+	}
+
+	void commit(JB::IlBuilder* b) {}
+
+	void reload(JB::IlBuilder* b) {}
+
+	void mergeInto(JB::IlBuilder* b, RealPc& dest) {}
+
+	/// @group Unsafe / non-generic functionality
 	/// @{
 
-	RUIntPtr offset(JB::IlBuilder* b) {
-		return RUIntPtr::pack(
-			b->Sub(
-				_pcReg.unpack(),
-				_startPcReg.unpack()
-		));
-	}
+	JB::IlValue* base() const { return _base; }
 
-	RPtr<std::uint8_t> start(JB::IlBuilder* b) { return _startPcReg.load(b); }
+	JB:: IlValue* unpack(RBuilder* b) const { return load(b).unpack(); }
 
-	RPtr<std::uint8_t> load(JB::IlBuilder* b) {
+	JB::IlValue* offset(RBuilder* b) const {
+		JB::IlValue* value =
+			 b->Sub(
+				b->ConvertTo(b->Word, unpack(b)),
+				b->ConvertTo(b->Word, _base));
 
-		b->Call("print_s", 1, b->Const((void*)"Pc loading: value="));
-		b->Call("print_u", 1, _pcReg.unpack());
+		b->Call("print_s", 1, b->Const((void*)"Pc offset: value="));
+		b->Call("print_u", 1, value);
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 
-		return _pcReg.load(b);
-
+		return value;
 	}
 
 	/// @}
 	///
 
-	void commit(JB::IlBuilder* b) {
-		_pcReg.commit(b);
-		_startPcReg.commit(b);
-	}
-
-	void reload(JB::IlBuilder* b) {
-		_pcReg.reload(b);
-		_startPcReg.reload(b);
-	}
-
-	void mergeInto(JB::IlBuilder* b, RealPc& dest) {
-		_pcReg.mergeInto(b, dest._pcReg);
-		_startPcReg.mergeInto(b, dest._startPcReg);
-	}
-
 private:
-	RealRegister _pc;
-	RealRegister _startpc;
+	JB::IlType* _ptype;
+	JB::IlValue* _address;
+	JB::IlValue* _base;
 };
 
 /// Read-only access to the PC (aka instruction-pointer) register.
@@ -94,13 +88,6 @@ class VirtPc {
 public:
 	VirtPc() : _address(nullptr), _base(nullptr) {}
 
-	CPtr<std::uint8_t> load(JB::BytecodeBuilder* b) const {
-		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc: load value="));
-		b->Call("print_x", 1, constant(b, unpack(b)));
-		b->Call("print_s", 1, b->Const((void*)"\n"));
-		return CPtr<std::uint8_t>::pack(unpack(b));
-	}
-
 	void initialize(JB::IlBuilder* b, JB::IlValue* address, CPtr<std::uint8_t> value) {
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc initialize value="));
 		b->Call("print_x", 1, value.toIl(b));
@@ -109,7 +96,14 @@ public:
 		_base = value.unpack();
 	}
 
-	void commit(JB::BytecodeBuilder* b) const {
+	CPtr<std::uint8_t> load(JB::BytecodeBuilder* b) const {
+		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc: load value="));
+		b->Call("print_x", 1, constant(b, unpack(b)));
+		b->Call("print_s", 1, b->Const((void*)"\n"));
+		return CPtr<std::uint8_t>::pack(unpack(b));
+	}
+
+	void commit(JB::BytecodeBuilder* b) {
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc: commit: value="));
 		b->Call("print_x", 1, load(b).toIl(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));
@@ -137,7 +131,6 @@ public:
 
 private:
 	JB::IlValue* _address;
-	JB::IlValue* _pcStartAddr;
 	std::uint8_t* _base;
 };
 

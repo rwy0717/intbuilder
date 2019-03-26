@@ -48,8 +48,7 @@ struct GenDispatchValue<OMR::Model::Mode::REAL> {
 	OMR::Model::RUIntPtr operator()(JB::IlBuilder* b, Model::RealMachine& machine) {
 		return OMR::Model::RUIntPtr::pack(
 			b->LoadAt(b->typeDictionary()->pInt8,
-				machine.pc.load(b).unpack()
-		));
+				machine.instruction.address(b).unpack()));
 	}
 };
 #endif // INT_ENABLED
@@ -245,6 +244,7 @@ struct GenBranchIf {
 		JB::IlValue* cond = machine.stack.popInt64(b);
 
 		ifCmpNotEqualZero(b, machine, cond, offset);
+		b->Call("print_s", 1, b->Const((void*)"$$$ FALSE TAKEN !!!\n"));
 		next(b, machine, {b, INSTR_SIZE});
 		return true;
 	}
@@ -270,7 +270,7 @@ struct CallBuilder<Model::Mode::VIRT> : CallBuilderBase {
 template <>
 struct CallBuilder<Model::Mode::REAL> : CallBuilderBase {
 	void build(Model::Machine<Model::Mode::REAL>& machine, JB::IlBuilder* b) {
-		machine.pc.next(b, Model::RSize(b, INSTR_SIZE));
+		// TODO! something
 	}
 };
 #endif // INT_ENABLED
@@ -292,6 +292,7 @@ public:
 		set(Op::ADD,        GenAdd<M>());
 		set(Op::PUSH_LOCAL, GenPushLocal<M>());
 		set(Op::POP_LOCAL,  GenPopLocal<M>());
+		set(Op::BRANCH_IF,  GenBranchIf<M>());
 
 		_handlers.setDefault(GenDefault<M>());
 	}
@@ -354,8 +355,13 @@ public:
 
 		Model::Machine<M>::Factory factory;
 		factory.setInterpreter(interpreter);
-		factory.setFunction(Model::RUIntPtr::pack(target));
-		_machine.reset(factory.create(this));
+		factory.setFunction(Model::RPtr<Func>::pack(target));
+
+		OMR::Model::FunctionData<OMR::Model::Mode::REAL> data(
+			OMR::Model::RPtr<std::uint8_t>::pack(
+				StructFieldInstanceAddress("Func", "body", target)));
+
+		_machine.reset(factory.create(this, data));
 		_machine->commit(this);
 
 		GEN_TRACE_MSG(this, "$$$ MACHINE INITIALIZED");
@@ -442,11 +448,15 @@ public:
 		Model::VirtMachine::Factory factory;
 		factory.setInterpreter(Load("interpreter"));
 		factory.setFunction(Model::CPtr<Func>::pack(_func));
-		factory.setBuilders(builders());
-		std::shared_ptr<Model::VirtMachine> machine(factory.create(this));
+
+		OMR::Model::FunctionData<Model::Mode::VIRT> data(OMR::Model::CPtr<std::uint8_t>::pack(_func->body), builders());
+		std::shared_ptr<Model::VirtMachine> machine(factory.create(this, data));
 		setVMState(machine.get());
 
-		return buildBytecodeIL(/* machine.get(), _func */);
+		buildBytecodeIL(/* machine.get(), _func */);
+
+		Return();
+		return true;
 	}
 
 private:
@@ -583,14 +593,16 @@ extern "C" int main(int argc, char** argv) {
 	fprintf(stderr, "@@@ int main: initial op=%hhu\n", target->body[0]);
 	fprintf(stderr, "@@@ int main: initial sp=%p\n", interpreter.sp());
 
-#ifdef JIT_ENABLED
+#if defined(JIT_ENABLED) && 0
 	{
 		fprintf(stderr, "!!! int main: compiling function\n");
 		CompiledFn cfunc = compile(target);
-		fprintf(stderr, "!!! int main: running compiled function\n");
-		cfunc(&interpreter);
-		fprintf(stderr, "!!! end of compiled function\n");
-		fprintf(stderr, "!!! int main: stack[0]=%llu\n", interpreter.peek(0));
+		if (cfunc) {
+			fprintf(stderr, "!!! int main: running compiled function\n");
+			cfunc(&interpreter);
+			fprintf(stderr, "!!! end of compiled function\n");
+			fprintf(stderr, "!!! int main: stack[0]=%llu\n", interpreter.peek(0));
+		}
 	}
 #endif
 
@@ -598,9 +610,11 @@ extern "C" int main(int argc, char** argv) {
 	{
 		fprintf(stderr, "!!! int main: compiling interpreter\n");
 		InterpretFn interpret = buildInterpret();
-		fprintf(stderr, "!!! int main: running interpreted function\n");
-		interpret_wrap(&interpreter, target, interpret);
-		fprintf(stderr, "!!! end of interpreted function\n");
+		if (interpret) {
+			fprintf(stderr, "!!! int main: running interpreted function\n");
+			interpret_wrap(&interpreter, target, interpret);
+			fprintf(stderr, "!!! end of interpreted function\n");
+		}
 	}
 #endif
 

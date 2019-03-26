@@ -22,7 +22,7 @@ public:
 
 	VirtOperandStack(const VirtOperandStack& other)
 		: _etype(other._etype), _ptype(other._ptype), _sp(other._sp), _values(other._values) {
-		fprintf(stderr, "@@@ VIRT OPERAND STACK COPY depth=%u\n", _values.size());
+		fprintf(stderr, "@@@ VIRT OPERAND STACK COPY depth=%zu\n", _values.size());
 	}
 
 	void initialize(JB::IlBuilder* b, JB::IlType* etype, JB::IlValue* address) {

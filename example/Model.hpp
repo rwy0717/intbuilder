@@ -78,10 +78,6 @@ class Func<Mode::REAL> {
 public:
 	Func() : _address(nullptr) {}
 
-	/// clone constructor
-	Func(JB::IlBuilder* b, const Func<Mode::REAL>& other)
-		: _address(b->Copy(other._address)) {}
-
 	void initialize(OMR_UNUSED JB::IlBuilder* b, RPtr<::Func> function) {
 		_address = function.unpack();
 	}
@@ -136,7 +132,7 @@ public:
 
 	void initialize(JB::IlBuilder* b, JB::IlValue* pc, CPtr<::Func> func) {
 		_func.initialize(b, func);
-		_pc.initialize(b, pc, {b, func.unpack()->body});
+		_pc.initialize(b, pc, _func.body(b));
 	}
 
 	/// Get the address of the current function by loading from the PC.
@@ -214,16 +210,23 @@ class Instruction<Mode::REAL> {
 public:
 	static constexpr Mode M = Mode::REAL;
 
-	Instruction() : _func(nullptr) {}
+	Instruction() {}
 
-	RPtr<std::uint8_t> address(JB::IlBuilder* b) const {
-		return RPtr<std::uint8_t>::pack(_func->body(b).unpack() + index(b).unpack());
+	void initialize(RBuilder* b, JB::IlValue* pc, RPtr<::Func> func) {
+		_func.initialize(b, func);
+		_pc.initialize(b, pc, _func.body(b));
 	}
 
-	const Func<M>* func() const { return &_func; }
+	RPtr<std::uint8_t> address(JB::IlBuilder* b) const {
+		return _pc.load(b);
+	}
 
-	CSize index(JB::IlBuilder* b) const {
-		return b->bcIndex();
+	const RealFunc& func() const { return _func; }
+
+	const OMR::Model::RealPc& pc() const { return _pc; }
+
+	RSize index(JB::IlBuilder* b) const {
+		return RSize::pack(_pc.offset(b));
 	}
 
 	RUInt64 immediateUInt64(JB::IlBuilder* b, RSize offset) {
@@ -250,16 +253,22 @@ public:
 		return immediateSize(b, RSize(b, 0));
 	}
 
+	void commit(RBuilder* b) {}
+
+	void mergeInto(RBuilder* b, Instruction<Mode::REAL>& i) {}
+
+	void reload(RBuilder* b) {}
+
 private:
 	template <typename T>
 	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
 		JB::TypeDictionary* t = b->typeDictionary();
 
-		JB::IlValue* addr = b->IndexAt(t->pInt8, _pcReg.load(b).toIl(b), offset);
+		JB::IlValue* addr = b->IndexAt(t->pInt8, _pc.load(b).toIl(b), offset);
 		JB::IlValue* value = b->LoadAt(t->PointerTo(t->toIlType<T>()), addr);
 
 		b->Call("print_s", 1, b->Const((void*)"PC READ: pc="));
-		b->Call("print_x", 1, _pcReg.load(b).toIl(b));
+		b->Call("print_x", 1, _pc.load(b).toIl(b));
 		b->Call("print_s", 1, b->Const((void*)" offset="));
 		b->Call("print_x", 1, offset);
 		b->Call("print_s", 1, b->Const((void*)" addr="));
@@ -271,7 +280,8 @@ private:
 		return value;
 	}
 
-	const Func<M> _func;
+	RealFunc _func;
+	OMR::Model::RealPc _pc;
 };
 
 template <Mode M>
@@ -283,16 +293,13 @@ public:
 
 		void setFunction(Ptr<M, ::Func> function) { _function = function; }
 
-		void setBuilders(JB::BytecodeBuilderTable* builders) { _builders = builders; }
-
-		Machine<M>* create(JB::IlBuilder* b) {
+		Machine<M>* create(JB::IlBuilder* b, OMR::Model::FunctionData<M>& data) {
 
 			JB::TypeDictionary* t = b->typeDictionary();
 
 			assert(_interpreter != nullptr);
-			// TODO: assert(_function != nullptr);
 	
-			Model::Machine<M>* machine = new Model::Machine<M>(_builders);
+			Model::Machine<M>* machine = new Model::Machine<M>(data);
 
 			JB::IlValue* pcAddr      = b->StructFieldInstanceAddress("Interpreter", "_pc",      _interpreter);
 			JB::IlValue* spAddr      = b->StructFieldInstanceAddress("Interpreter", "_sp",      _interpreter);
@@ -303,6 +310,8 @@ public:
 
 			machine->stack.initialize(b, t->Int64, spAddr);
 
+			machine->control.initialize(b, pcAddr);
+	
 			OMR::Model::Size<M> nlocals = machine->instruction.func().nlocals(b);
 			JB::IlValue* localsAddr = machine->stack.reserve64(b, nlocals);
 			machine->locals.initialize(b, t->Int64, localsAddr, nlocals);
@@ -316,7 +325,7 @@ public:
 		JB::BytecodeBuilderTable* _builders = nullptr;
 	};
 
-	Machine(JB::BytecodeBuilderTable* builders) : control(builders) {}
+	Machine(OMR::Model::FunctionData<M>& data) : control(data) {}
 
 	Machine(const Machine&) = default;
 
@@ -375,8 +384,58 @@ private:
 	Machine() {}
 };
 
-// RWY TODO: using RealMachine = Machine<Mode::REAL>;
+using RealMachine = Machine<Mode::REAL>;
 using VirtMachine = Machine<Mode::VIRT>;
+
+///
+/// Runtime control flow operations.
+///
+
+void halt(Model::RBuilder* b, RealMachine& machine) {
+	b->Call("print_s", 1, b->Const((void*)"$$$ machine halt\n"));
+	// machine.commit(b);
+	b->Return();
+}
+
+/// relative fallthrough.
+void next(Model::RBuilder* b, RealMachine& machine, RSize offset) {
+	JB::IlValue* off = offset.unpack();
+	JB::IlValue* index = machine.instruction.index(b).unpack();
+	JB::IlValue* target = b->Add(index, off);
+
+	b->Call("print_s", 1, b->Const((void*)"$$$ machine next: offset="));
+	b->Call("print_u", 1, off);
+	b->Call("print_s", 1, b->Const((void*)" target-index="));
+	b->Call("print_u", 1, target);
+	b->Call("print_s", 1, b->Const((void*)"\n"));
+
+	machine.control.next(b, target);
+}
+
+/// Relative conditional if, signed offset.
+void ifCmpNotEqualZero(Model::RBuilder* b, RealMachine& machine, JB::IlValue* cond, RInt64 offset) {
+
+	JB::IlValue* off = offset.unpack();
+	JB::IlValue* index = machine.instruction.index(b).unpack();
+	JB::IlValue* pc = machine.instruction.address(b).unpack();
+	JB::IlValue* target = b->Add(index, off);
+	JB::IlValue* targetpc = b->Add(pc, off);
+
+	b->Call("print_s", 1, b->Const((void*)"$$$ machine ifCmpNotEqualZero offset="));
+	b->Call("print_u", 1, off);
+	b->Call("print_s", 1, b->Const((void*)" target-pc="));
+	b->Call("print_u", 1, targetpc);
+	b->Call("print_s", 1, b->Const((void*)" target-index="));
+	b->Call("print_u", 1, target);
+	b->Call("print_s", 1, b->Const((void* )"\n"));
+
+	// _pcReg.store(b, CPtr<std::uint8_t>::pack(targetPc));
+	machine.control.IfCmpNotEqualZero(b, cond, target);
+}
+
+///
+/// Compile-time control flow operations
+///
 
 void halt(Model::CBuilder* b, VirtMachine& machine) {
 	b->Call("print_s", 1, b->Const((void*)"$$$ machine halt\n"));
@@ -396,7 +455,7 @@ void next(Model::CBuilder* b, VirtMachine& machine, CSize offset) {
 	b->Call("print_u", 1, b->Const((std::int64_t)target));
 	b->Call("print_s", 1, b->Const((void*)"\n"));
 
-	machine.control.next(b, target); 
+	machine.control.next(b, target);
 }
 
 /// Relative conditional if, signed offset.
