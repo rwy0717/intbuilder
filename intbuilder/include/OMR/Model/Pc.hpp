@@ -16,7 +16,6 @@
 namespace OMR {
 namespace Model {
 
-/// V
 /// pc
 /// startPc
 class RealPc {
@@ -28,17 +27,22 @@ public:
 	RealPc(RealPc&& other) = default;
 
 	/// Set up the function pointer.
-	void initialize(RBuilder* b, JB::IlValue* address, RPtr<std::uint8_t> value) {
+	void initialize(JB::IlBuilder* b, JB::IlValue* address, RPtr<std::uint8_t> value) {
 		_ptype = b->typeDictionary()->toIlType<std::uint8_t**>();
 		_address = address;
 		_base = value.unpack();
 		b->StoreAt(_address, _base);
 		b->Call("print_s", 1, b->Const((void*)"$$$ RealPc initialize value="));
-		b->Call("print_x", 1, load(b).unpack());
+		b->Call("print_x", 1, xload(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 	}
 
 	RPtr<std::uint8_t> load(RBuilder* b) const {
+		return xload(b);
+	}
+
+	/// Load from outside a bytecode handler.
+	RPtr<std::uint8_t> xload(JB::IlBuilder* b) const {
 		JB::IlValue* value = b->LoadAt(_ptype, _address);
 		b->Call("print_s", 1, b->Const((void*)"Pc loading: value="));
 		b->Call("print_x", 1, value);
@@ -96,14 +100,14 @@ public:
 		_base = value.unpack();
 	}
 
-	CPtr<std::uint8_t> load(JB::BytecodeBuilder* b) const {
+	CPtr<std::uint8_t> load(CBuilder* b) const {
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc: load value="));
 		b->Call("print_x", 1, constant(b, unpack(b)));
 		b->Call("print_s", 1, b->Const((void*)"\n"));
 		return CPtr<std::uint8_t>::pack(unpack(b));
 	}
 
-	void commit(JB::BytecodeBuilder* b) {
+	void commit(CBuilder* b) {
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtPc: commit: value="));
 		b->Call("print_x", 1, load(b).toIl(b));
 		b->Call("print_s", 1, b->Const((void*)"\n"));

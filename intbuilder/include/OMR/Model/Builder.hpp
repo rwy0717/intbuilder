@@ -5,6 +5,10 @@
 #include <OMR/Model/Mode.hpp>
 #include <OMR/Model/Value.hpp>
 
+#include <RBuilder.hpp>
+#include <CBuilder.hpp>
+
+#include <TypeDictionary.hpp>
 #include <IlBuilder.hpp>
 #include <MethodBuilder.hpp>
 #include <BytecodeBuilder.hpp>
@@ -16,47 +20,21 @@
 namespace OMR {
 namespace Model {
 
-// TODO RWY: Pick a name: Builder / IlBuilder / CIlBuilder / VirtBuilder ???
+using XBuilder = JitBuilder::XBuilder;
+using RBuilder = JitBuilder::RBuilder;
+using CBuilder = JitBuilder::CBuilder;
 
-template <Mode M> struct IlBuilderAlias;
-template <> struct IlBuilderAlias<Mode::REAL> : TypeAlias<JitBuilder::IlBuilder> {};
-template <> struct IlBuilderAlias<Mode::VIRT> : TypeAlias<JitBuilder::BytecodeBuilder> {};
+template <Mode> struct BuilderAlias;
+template <> struct BuilderAlias<Mode::REAL> : TypeAlias<RBuilder> {};
+template <> struct BuilderAlias<Mode::VIRT> : TypeAlias<CBuilder> {};
 
-template <Mode M> using IlBuilder = typename IlBuilderAlias<M>::Type;
-template <Mode M> using Builder = typename IlBuilderAlias<M>::Type;
-
-using VirtIlBuilder = IlBuilder<Mode::VIRT>;
-using RealIlBuilder = IlBuilder<Mode::REAL>;
-
-using VirtBuilder = IlBuilder<Mode::VIRT>;
-using RealBuilder = IlBuilder<Mode::REAL>;
-
-using RBuilder = IlBuilder<Mode::REAL>;
-using CBuilder = IlBuilder<Mode::VIRT>;
+template <Mode M>
+using Builder = typename BuilderAlias<M>::Type;
 
 template <typename T>
 JitBuilder::IlType* ilType(JitBuilder::IlBuilder* b) {
 	return b->typeDictionary()->toIlType<T>();
 }
-
-class IntBcBuilder : public JB::IlBuilder {
-public:
-	IntBcBuilder() {
-		_exit = OrphanBuilder();
-		_exit->Call("print_s", 1, _exit->ConstAddress((void*)"$$$ *** BC EXIT"));
-	}
-
-	void Exit() { Goto(ExitBuilder()); }
-
-	JB::IlBuilder* ExitBuilder() { return _exit; }
-
-	void End() {
-		AppendBuilder(_exit);
-	}
-
-private:
-	JB::IlBuilder* _exit;
-};
 
 #if 0
 template <typename T>

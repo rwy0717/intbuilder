@@ -1,6 +1,8 @@
 #if !defined(OMR_JITBUILDER_BYTECODEMETHODBUILDER_HPP_)
 #define OMR_JITBUILDER_BYTECODEMETHODBUILDER_HPP_
 
+#include <OMR/Model/Builder.hpp>
+
 #include <BytecodeHandlerTable.hpp>
 #include <MethodBuilder.hpp>
 #include <BytecodeBuilder.hpp>
@@ -24,7 +26,7 @@ public:
 		std::int32_t index = -1;
 		while((index = GetNextBytecodeFromWorklist()) != -1) {
 			std::uint32_t opcode = getOpcode(index);
-			BytecodeBuilder* builder = _builders.get(this, index);
+			CBuilder* builder = _builders.get(this, index);
 			assert(index == builder->bcIndex());
 
 			fprintf(stderr, "@@@ *** compiling index=%u opcode=%u\n", index, opcode);

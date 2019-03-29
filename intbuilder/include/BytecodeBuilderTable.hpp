@@ -12,17 +12,17 @@ namespace JitBuilder {
 
 class BytecodeBuilderTable {
 public:
-	using Map = std::map<std::size_t, BytecodeBuilder*>;
+	using Map = std::map<std::size_t, CBuilder*>;
 	using Iter = Map::iterator;
-	using Node = std::pair<const std::size_t, BytecodeBuilder*>;
+	using Node = std::pair<const std::size_t, CBuilder*>;
 
-	BytecodeBuilder* get(IlBuilder* b, std::size_t index) {
+	CBuilder* get(IlBuilder* b, std::size_t index) {
 		std::pair<Iter, bool> search = _map.insert(Node(index, nullptr));
 		Iter iter = search.first;
 		bool found = search.second;
 		if (found) {
 			assert(iter->second == nullptr);
-			iter->second = b->OrphanBytecodeBuilder(index, (char*)"unknown-bytecode");
+			iter->second = b->OrphanCBuilder(index, (char*)"unknown-bytecode");
 			fprintf(stderr, "@@@ BytecodeBuilderTable: creating bytecode builder index=%lu\n", index);
 		}
 		assert(iter->second != nullptr);

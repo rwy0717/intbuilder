@@ -1,10 +1,13 @@
 #if !defined(OMR_JITBUILDER_BYTECODEINTERPRETERBUILDER_HPP_)
 #define OMR_JITBUILDER_BYTECODEINTERPRETERBUILDER_HPP_
 
+#include <OMR/Model/Builder.hpp>
+
 #include <MethodBuilder.hpp>
 #include <VirtualMachineState.hpp>
 #include <TypeDictionary.hpp>
 
+#include <cassert>
 #include <cstdint>
 #include <cstddef>
 #include <map>
@@ -19,7 +22,7 @@ public:
 	public:
 		virtual ~Handler() = default;
 
-		virtual bool invoke(IlBuilder* b, VirtualMachineState* state) = 0;
+		virtual bool invoke(RBuilder* b, VirtualMachineState* state) = 0;
 	};
 
 	template <typename HandlerT, typename VmStateT>
@@ -29,7 +32,7 @@ public:
 
 		virtual ~Wrapper() override final {}
 
-		virtual bool invoke(IlBuilder* b, VirtualMachineState* state) override final {
+		virtual bool invoke(RBuilder* b, VirtualMachineState* state) override final {
 			assert(state != nullptr);
 			return _handler(b, *static_cast<VmStateT*>(state));
 		}
@@ -98,7 +101,7 @@ public:
 
 	~BytecodeInterpreterBuilder() = default;
 
-	virtual IlValue* getOpcode(IlBuilder* b) = 0;
+	virtual IlValue* getOpcode(RBuilder* b) = 0;
 
 	bool buildInterpreterIL(VirtualMachineState* state) {
 
@@ -112,8 +115,9 @@ public:
 		IlBuilder* cont = nullptr;
 		DoWhileLoop((char*)"interpreter_continue", &loop, &br, &cont);
 
-		// state->Reload(loop);
-		IlValue* opcode = getOpcode(loop);
+		RBuilder* decode = OrphanRBuilder(-1, (char*)"decode");
+		loop->AppendBuilder(decode);
+		IlValue* opcode = getOpcode(decode);
 		loop->Store("interpreter_opcode", opcode);
 	
 		loop->Call("print_s", 1, loop->Const((void*)"$$$ *** INTERPRETING: opcode="));
@@ -135,7 +139,7 @@ private:
 			return nullptr;
 		}
 
-		IlBuilder* b = OrphanBuilder();
+		RBuilder* b = OrphanRBuilder(-1, (char*)"default");
 		VirtualMachineState* copy = state->MakeCopy();
 		copy->Reload(b);
 		_handlers->getDefault()->invoke(b, copy);
@@ -146,8 +150,10 @@ private:
 	std::vector<IlBuilder::JBCase*> genHandlers(VirtualMachineState* state) {
 		std::vector<IlBuilder::JBCase*> cases;
 		for(const auto& node : *_handlers) {
-			IlBuilder* b = OrphanBuilder();
-			cases.push_back(MakeCase(node.first, &b, false));
+			std::int32_t opcode = node.first;
+			RBuilder* b = OrphanRBuilder(opcode, (char*)"unnamed");
+			IlBuilder* bx = b;
+			cases.push_back(MakeCase(opcode, &bx, false));
 			VirtualMachineState* copy = state->MakeCopy();
 			copy->Reload(b);
 			node.second->invoke(b, copy);

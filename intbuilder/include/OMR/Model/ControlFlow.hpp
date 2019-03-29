@@ -33,6 +33,7 @@ public:
 		JB::IlType* type = t->PointerTo(t->Int8);
 
 		b->StoreAt(_address, b->Add(base(), index));
+		b->GotoEnd();
 	}
 
 	/// absolute control flow.
@@ -46,30 +47,10 @@ public:
 		JB::IlType* type = t->PointerTo(t->Int8);
 
 		JB::IlBuilder* onTrue = nullptr;
-		JB::IlBuilder* mergePoint = b->OrphanBuilder();
-
-		b->IfCmpNotEqualZero(&onTrue, cond);
-		b->Goto(mergePoint);
+		b->IfThen(&onTrue, cond);
 		onTrue->Call("print_s", 1, onTrue->Const((void*)"$$$ ON TRUE TAKEN !!! \n"));
-		onTrue->Goto(mergePoint);
-		b->AppendBuilder(onTrue);
-		b->AppendBuilder(mergePoint);
-		mergePoint->Return();
-		// b->Goto(x);
-#if 0
-		b->IfCmpNotEqualZero(&onTrue, cond);
-		b->Goto(mergePoint);
-
-
 		onTrue->StoreAt(_address, onTrue->IndexAt(type, base(), index));
-
-		b->Goto(mergePoint);
-		mergePoint->Call("print_s", 1, mergePoint->Const((void*)"$$$ MWERGEPOIINTS !!! \n"));
-
-		b->AppendBuilder(onTrue);
-		b->AppendBuilder(mergePoint);
-		mergePoint->Call("print_s", 1, mergePoint->Const((void*)"$$$ MWERGEPOIINTS !!! \n"));
-#endif
+		onTrue->Goto(b->End());
 	}
 
 	void halt(JB::IlBuilder* b) {

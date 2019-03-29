@@ -18,7 +18,7 @@ class OperandStackParameters<Mode::REAL> {
 public:
 	void initialize()
 
-	JitBuilder::IlValue* get(RBuilder b, RSize index) {
+	JitBuilder::IlValue* get(RBuilder* b, RSize index) {
 		return loadAt(b, indexAt(b, _addr, index));
 	}
 

@@ -16,7 +16,7 @@ class BytecodeHandlerEntry {
 public:
 	virtual ~BytecodeHandlerEntry() = default;
 
-	virtual bool invoke(BytecodeBuilder* b) = 0;
+	virtual bool invoke(CBuilder* b) = 0;
 };
 
 template <typename HandlerT, typename VmStateT>
@@ -26,7 +26,7 @@ public:
 
 	virtual ~BytecodeHandlerWrapper() override final {}
 
-	virtual bool invoke(BytecodeBuilder* b) override final {
+	virtual bool invoke(CBuilder* b) override final {
 		VmStateT* state = static_cast<VmStateT*>(b->vmState());
 		assert(state != nullptr);
 		fprintf(stderr, "@@@ invoking bc-builder=%p vm-state=%p\n", b, state);
@@ -41,7 +41,7 @@ class BytecodeHandlerTableBase {
 public:
 	~BytecodeHandlerTableBase() = default;
 
-	bool invoke(BytecodeBuilder* b, std::uint32_t opcode) {
+	bool invoke(CBuilder* b, std::uint32_t opcode) {
 		bool success = false;
 		if (_handlers.count(opcode) != 0) {
 			success = _handlers[opcode]->invoke(b);

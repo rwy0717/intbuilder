@@ -179,11 +179,11 @@ public:
 		return CValue<T>::pack(read<T>(b));
 	}
 
-	void commit(Model::CBuilder* b) {}
+	void commit(JB::IlBuilder* b) {}
 
-	void reload(Model::CBuilder* b) {}
+	void reload(JB::IlBuilder* b) {}
 
-	void mergeInto(Model::CBuilder* b, Instruction<Mode::VIRT>& dest) {}
+	void mergeInto(JB::IlBuilder* b, Instruction<Mode::VIRT>& dest) {}
 
 private:
 	template <typename T>
@@ -212,56 +212,60 @@ public:
 
 	Instruction() {}
 
-	void initialize(RBuilder* b, JB::IlValue* pc, RPtr<::Func> func) {
+	void initialize(JB::IlBuilder* b, JB::IlValue* pc, RPtr<::Func> func) {
 		_func.initialize(b, func);
 		_pc.initialize(b, pc, _func.body(b));
 	}
 
-	RPtr<std::uint8_t> address(JB::IlBuilder* b) const {
+	RPtr<std::uint8_t> address(RBuilder* b) const {
 		return _pc.load(b);
+	}
+
+	RPtr<std::uint8_t> xaddress(JB::IlBuilder* b) const {
+		return _pc.xload(b);
 	}
 
 	const RealFunc& func() const { return _func; }
 
 	const OMR::Model::RealPc& pc() const { return _pc; }
 
-	RSize index(JB::IlBuilder* b) const {
+	RSize index(RBuilder* b) const {
 		return RSize::pack(_pc.offset(b));
 	}
 
-	RUInt64 immediateUInt64(JB::IlBuilder* b, RSize offset) {
+	RUInt64 immediateUInt64(RBuilder* b, RSize offset) {
 		return RUInt64::pack(read<std::uint64_t>(b, offset.unpack()));
 	}
 
-	RUInt64 immediateUInt64(JB::IlBuilder* b) {
+	RUInt64 immediateUInt64(RBuilder* b) {
 		return immediateUInt64(b, RSize(b, 0));
 	}
 
-	RInt64 immediateInt64(JB::IlBuilder* b, RSize offset) {
+	RInt64 immediateInt64(RBuilder* b, RSize offset) {
 		return RInt64::pack(read<std::int64_t>(b, offset.unpack()));
 	}
 
-	RInt64 immediateInt64(JB::IlBuilder* b) {
+	RInt64 immediateInt64(RBuilder* b) {
 		return immediateInt64(b, RSize(b, 0));
 	}
 
-	RSize immediateSize(JB::IlBuilder* b, RSize offset) {
+	RSize immediateSize(RBuilder* b, RSize offset) {
 		return RSize::pack(read<std::size_t>(b, offset.unpack()));
 	}
 
-	RSize immediateSize(JB::IlBuilder* b) {
+	RSize immediateSize(RBuilder* b) {
 		return immediateSize(b, RSize(b, 0));
 	}
 
-	void commit(RBuilder* b) {}
+	void commit(JB::IlBuilder* b) {}
 
-	void mergeInto(RBuilder* b, Instruction<Mode::REAL>& i) {}
+	void mergeInto(JB::IlBuilder* b, Instruction<Mode::REAL>& i) {}
 
-	void reload(RBuilder* b) {}
+	void reload(JB::IlBuilder* b) {}
 
 private:
 	template <typename T>
-	JB::IlValue* read(JB::IlBuilder* b, JB::IlValue* offset = 0) {
+	JB::IlValue* read(RBuilder* b, JB::IlValue* offset = 0) {
 		JB::TypeDictionary* t = b->typeDictionary();
 
 		JB::IlValue* addr = b->IndexAt(t->pInt8, _pc.load(b).toIl(b), offset);
@@ -331,19 +335,19 @@ public:
 
 	Machine(Machine&&) = default;
 
-	void commit(Model::Builder<M>* b) {
+	void commit(JB::IlBuilder* b) {
 		instruction.commit(b);
 		stack.commit(b);
 		locals.commit(b);
 	}
 
-	void mergeInto(Model::Builder<M>* b, Machine<M>& dest) {
+	void mergeInto(JB::IlBuilder* b, Machine<M>& dest) {
 		instruction.mergeInto(b, dest.instruction);
 		stack.mergeInto(b, dest.stack);
 		locals.mergeInto(b, dest.locals);
 	}
 
-	void reload(Model::Builder<M>* b) {
+	void reload(JB::IlBuilder* b) {
 		instruction.reload(b);
 		stack.reload(b);
 		locals.reload(b);
@@ -353,15 +357,12 @@ public:
 	/// @{
 
 	virtual void Commit(JB::IlBuilder* b) override final {
-		commit(reinterpret_cast<Builder<M>*>(b));
+		commit(b);
 	}
 
 	virtual void MergeInto(JB::VirtualMachineState* dest, JB::IlBuilder* b) override final {
 		fprintf(stderr, "@@@ Machine %p MergeInto %p\n", this, dest);
-		mergeInto(
-			reinterpret_cast<Builder<M>*>(b),
-			*reinterpret_cast<Model::Machine<M>*>(dest)
-		);
+		mergeInto(b, *reinterpret_cast<Model::Machine<M>*>(dest));
 	}
 
 	virtual JB::VirtualMachineState* MakeCopy() override final {

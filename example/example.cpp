@@ -48,14 +48,14 @@ struct GenDispatchValue<OMR::Model::Mode::REAL> {
 	OMR::Model::RUIntPtr operator()(JB::IlBuilder* b, Model::RealMachine& machine) {
 		return OMR::Model::RUIntPtr::pack(
 			b->LoadAt(b->typeDictionary()->pInt8,
-				machine.instruction.address(b).unpack()));
+				machine.instruction.xaddress(b).unpack()));
 	}
 };
 #endif // INT_ENABLED
 
 template <>
 struct GenDispatchValue<Model::Mode::VIRT> {
-	Model::CUIntPtr operator()(Model::CBuilder* b, Model::VirtMachine& machine) {
+	Model::CUIntPtr operator()(JB::CBuilder* b, Model::VirtMachine& machine) {
 		// translate pc to bytecode index.
 		return OMR::Model::CUIntPtr::pack(
 			static_cast<std::uintptr_t>(
@@ -98,7 +98,7 @@ struct GenFunctionEntry<OMR::Model::Mode::REAL> {
 
 template <>
 struct GenFunctionEntry<OMR::Model::Mode::VIRT> {
-	void operator()(OMR::Model::VirtIlBuilder* b, Model::VirtMachine& machine) {
+	void operator()(JB::IlBuilder* b, Model::VirtMachine& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "FUNCTION ENTRY");
 	}
@@ -106,7 +106,7 @@ struct GenFunctionEntry<OMR::Model::Mode::VIRT> {
 
 template <OMR::Model::Mode M>
 struct GenDefault {
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "DEFAULT HANDLER");
 		halt(b, machine);
@@ -116,7 +116,7 @@ struct GenDefault {
 
 template <OMR::Model::Mode M>
 struct GenError {
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ERROR (UNKNOWN BYTECODE)");
 		halt(b, machine);
@@ -128,7 +128,7 @@ template <OMR::Model::Mode M>
 struct GenHalt {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		GEN_TRACE_MSG(b, "HALT");
 		halt(b, machine);
 		return true;
@@ -182,7 +182,7 @@ template <OMR::Model::Mode M>
 struct GenAdd {
 	static constexpr std::size_t INSTR_SIZE = 1;
 
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ADD");
 		JB::IlValue* rhs = machine.stack.popInt64(b);
@@ -198,7 +198,7 @@ struct GenPushLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "PUSH_LOCAL");
 		OMR::Model::Size<M> index = machine.instruction.immediateSize(b, {b, INSTR_INDEX_OFFSET});
@@ -214,7 +214,7 @@ struct GenPopLocal {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_INDEX_OFFSET = 1;
 
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "POP_LOCAL");
 		OMR::Model::Size<M> index = machine.instruction.immediateSize(b, {b, INSTR_INDEX_OFFSET});
@@ -229,7 +229,7 @@ struct GenBranchIf {
 	static constexpr std::size_t INSTR_SIZE = 9;
 	static constexpr std::size_t INSTR_TARGET_OFFSET = 1;
 
-	bool operator()(OMR::Model::IlBuilder<M>* b, Model::Machine<M>& machine) {
+	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "BRANCH_IF");
 
@@ -329,7 +329,7 @@ public:
 		DefineReturnType(t->NoType);
 	}
 
-	virtual JB::IlValue* getOpcode(JB::IlBuilder* b) override {
+	virtual JB::IlValue* getOpcode(JB::RBuilder* b) override {
 		JB::TypeDictionary* t = b->typeDictionary();
 
 		b->Call("print_s", 1, b->Const((void*)"$$$ DISPATCHING\n"));
