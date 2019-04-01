@@ -22,7 +22,7 @@
 #include <memory>
 
 #define INT_ENABLED
-#define JIT_ENABLED
+// #define JIT_ENABLED
 
 void gen_dbg_msg(JB::IlBuilder* b, const char* file, std::size_t line, const char* func, const char* msg) {
 	b->Call("dbg_msg", 4,
@@ -119,7 +119,12 @@ struct GenError {
 	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "ERROR (UNKNOWN BYTECODE)");
+		auto b2 = b->OrphanBuilder();
+		b->Goto(b2);
+		b->AppendBuilder(b2);
+		b2->Return();
 		halt(b, machine);
+
 		return true;
 	}
 };
@@ -142,7 +147,14 @@ struct GenNop {
 	bool operator()(OMR::Model::Builder<M>* b, Model::Machine<M>& machine) {
 		OMR_TRACE();
 		GEN_TRACE_MSG(b, "NOP");
-		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
+
+		auto e = b->OrphanBuilder();
+		b->Goto(e);
+		GEN_TRACE_MSG(e, "AT END");
+		// b->Goto(b->End());
+		b->AppendBuilder(e);
+
+		// next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
@@ -287,12 +299,12 @@ public:
 		JitTypes::define(&_typedict);
 		set(Op::UNKNOWN,    GenError<M>());
 		set(Op::NOP,        GenNop<M>());
-		set(Op::HALT,       GenHalt<M>());
-		set(Op::PUSH_CONST, GenPushConst<M>());
-		set(Op::ADD,        GenAdd<M>());
-		set(Op::PUSH_LOCAL, GenPushLocal<M>());
-		set(Op::POP_LOCAL,  GenPopLocal<M>());
-		set(Op::BRANCH_IF,  GenBranchIf<M>());
+		// set(Op::HALT,       GenHalt<M>());
+		// set(Op::PUSH_CONST, GenPushConst<M>());
+		// set(Op::ADD,        GenAdd<M>());
+		// set(Op::PUSH_LOCAL, GenPushLocal<M>());
+		// set(Op::POP_LOCAL,  GenPopLocal<M>());
+		// set(Op::BRANCH_IF,  GenBranchIf<M>());
 
 		_handlers.setDefault(GenDefault<M>());
 	}
@@ -329,7 +341,7 @@ public:
 		DefineReturnType(t->NoType);
 	}
 
-	virtual JB::IlValue* getOpcode(JB::RBuilder* b) override {
+	virtual JB::IlValue* getOpcode(JB::IlBuilder* b) override {
 		JB::TypeDictionary* t = b->typeDictionary();
 
 		b->Call("print_s", 1, b->Const((void*)"$$$ DISPATCHING\n"));
@@ -584,7 +596,7 @@ Func* MakeBranchIfTrueFunction() {
 
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
-	Func* target = MakeBranchIfTrueFunction();
+	Func* target = MakeTwoNopsThenHaltFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "@@@ int main: interpreter=%p\n", &interpreter);

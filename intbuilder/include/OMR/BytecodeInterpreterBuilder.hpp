@@ -101,7 +101,7 @@ public:
 
 	~BytecodeInterpreterBuilder() = default;
 
-	virtual IlValue* getOpcode(RBuilder* b) = 0;
+	virtual IlValue* getOpcode(IlBuilder* b) = 0;
 
 	bool buildInterpreterIL(VirtualMachineState* state) {
 
@@ -115,7 +115,7 @@ public:
 		IlBuilder* cont = nullptr;
 		DoWhileLoop((char*)"interpreter_continue", &loop, &br, &cont);
 
-		RBuilder* decode = OrphanRBuilder(-1, (char*)"decode");
+		IlBuilder* decode = OrphanBuilder();
 		loop->AppendBuilder(decode);
 		IlValue* opcode = getOpcode(decode);
 		loop->Store("interpreter_opcode", opcode);
@@ -143,6 +143,7 @@ private:
 		VirtualMachineState* copy = state->MakeCopy();
 		copy->Reload(b);
 		_handlers->getDefault()->invoke(b, copy);
+		b->Finalize();
 		delete copy;
 		return b;
 	}
@@ -157,6 +158,7 @@ private:
 			VirtualMachineState* copy = state->MakeCopy();
 			copy->Reload(b);
 			node.second->invoke(b, copy);
+			b->Finalize();
 			delete copy;
 		}
 		return cases;

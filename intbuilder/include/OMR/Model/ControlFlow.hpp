@@ -25,6 +25,7 @@ public:
 	}
 
 	void next(RBuilder* b, JB::IlValue* index) {
+		std::fprintf(stderr, "#####test\n");
 		b->Call("print_s", 1, b->Const((void*)"$$$ ControlFlow next: index="));
 		b->Call("print_u", 1, index);
 		b->Call("print_s", 1, b->Const((void*)"\n"));
@@ -34,6 +35,8 @@ public:
 
 		b->StoreAt(_address, b->Add(base(), index));
 		b->GotoEnd();
+		b->End()->Call("print_s", 1, b->End()->Const((void*) "$$$ AT END\n"));
+		//b->End()->Return();
 	}
 
 	/// absolute control flow.
@@ -53,8 +56,9 @@ public:
 		onTrue->Goto(b->End());
 	}
 
-	void halt(JB::IlBuilder* b) {
-		b->Return();
+	void halt(JB::RBuilder* b) {
+		b->End()->Return();
+		b->Goto(b->End());
 	}
 
 	void halt(JB::IlBuilder* b, JB::IlValue* result) {

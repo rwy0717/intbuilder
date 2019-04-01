@@ -392,14 +392,15 @@ using VirtMachine = Machine<Mode::VIRT>;
 /// Runtime control flow operations.
 ///
 
-void halt(Model::RBuilder* b, RealMachine& machine) {
+inline void halt(Model::RBuilder* b, RealMachine& machine) {
 	b->Call("print_s", 1, b->Const((void*)"$$$ machine halt\n"));
+	b->GotoEnd();
 	// machine.commit(b);
-	b->Return();
+	b->End()->Return();
 }
 
 /// relative fallthrough.
-void next(Model::RBuilder* b, RealMachine& machine, RSize offset) {
+inline void next(Model::RBuilder* b, RealMachine& machine, RSize offset) {
 	JB::IlValue* off = offset.unpack();
 	JB::IlValue* index = machine.instruction.index(b).unpack();
 	JB::IlValue* target = b->Add(index, off);
@@ -414,7 +415,7 @@ void next(Model::RBuilder* b, RealMachine& machine, RSize offset) {
 }
 
 /// Relative conditional if, signed offset.
-void ifCmpNotEqualZero(Model::RBuilder* b, RealMachine& machine, JB::IlValue* cond, RInt64 offset) {
+inline void ifCmpNotEqualZero(Model::RBuilder* b, RealMachine& machine, JB::IlValue* cond, RInt64 offset) {
 
 	JB::IlValue* off = offset.unpack();
 	JB::IlValue* index = machine.instruction.index(b).unpack();
@@ -438,14 +439,14 @@ void ifCmpNotEqualZero(Model::RBuilder* b, RealMachine& machine, JB::IlValue* co
 /// Compile-time control flow operations
 ///
 
-void halt(Model::CBuilder* b, VirtMachine& machine) {
+inline void halt(Model::CBuilder* b, VirtMachine& machine) {
 	b->Call("print_s", 1, b->Const((void*)"$$$ machine halt\n"));
 	machine.commit(b);
 	b->Return();
 }
 
 /// relative fallthrough.
-void next(Model::CBuilder* b, VirtMachine& machine, CSize offset) {
+inline void next(Model::CBuilder* b, VirtMachine& machine, CSize offset) {
 	std::intptr_t off = offset.unpack();
 	std::size_t index = machine.instruction.index(b).unpack();
 	std::size_t target = index + off;
@@ -460,7 +461,7 @@ void next(Model::CBuilder* b, VirtMachine& machine, CSize offset) {
 }
 
 /// Relative conditional if, signed offset.
-void ifCmpNotEqualZero(Model::CBuilder* b, VirtMachine& machine, JB::IlValue* cond, CInt64 offset) {
+inline void ifCmpNotEqualZero(Model::CBuilder* b, VirtMachine& machine, JB::IlValue* cond, CInt64 offset) {
 
 	std::intptr_t off = offset.unpack();
 	std::size_t index = machine.instruction.index(b).unpack();
