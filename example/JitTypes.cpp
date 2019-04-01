@@ -25,7 +25,5 @@ void JitTypes::defineInterpreter(JB::TypeDictionary* t) {
 	t->DefineField("Interpreter", "_pc",        t->pInt8,                              offsetof(Interpreter, _pc));
 	t->DefineField("Interpreter", "_startpc",   t->pInt8,                              offsetof(Interpreter, _startpc));
 	t->DefineField("Interpreter", "_fp",        t->PointerTo(t->LookupStruct("Func")), offsetof(Interpreter, _fp));
-	t->DefineField("Interpreter", "_interpret", t->Address,                            offsetof(Interpreter, _interpret));
-	t->DefineField("Interpreter", "_stack",     t->NoType,                             offsetof(Interpreter, _stack));
 	t->CloseStruct("Interpreter");
 }

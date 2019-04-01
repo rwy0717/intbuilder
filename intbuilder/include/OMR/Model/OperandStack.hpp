@@ -35,11 +35,13 @@ public:
 	void commit(JB::IlBuilder* b) {
 		b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: commit\n"));
 
+		std::size_t n = _values.size();
+
 		JB::IlValue* ptr = b->Sub(_sp.load(b), b->Const(8)); // Roll SP down to first slot.
-		for(std::size_t i = 0; i < _values.size(); ++i) {
+		for(std::size_t i = 0; i < n; ++i) {
 
 			auto tgt = b->IndexAt(_ptype, ptr, b->Const(0 - (std::int64_t)i));
-			auto val = _values[i];
+			auto val = _values[n - i - 1];
 
 			b->Call("print_s", 1, b->Const((void*)"$$$ VirtOperandStack: commit: store: addr="));
 			b->Call("print_x", 1, tgt);

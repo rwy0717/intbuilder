@@ -60,11 +60,11 @@ CValue<T> add(JitBuilder::IlBuilder* b, CValue<U> lhs, RValue<U> rhs) {
 	return CValue<T>::pack(lhs.unpack() + rhs.unpack());
 }
 
-CInt64 add(JB::IlBuilder* b, CInt64 lhs, CInt64 rhs) {
+inline CInt64 add(JB::IlBuilder* b, CInt64 lhs, CInt64 rhs) {
 	return CInt64::pack(lhs.unpack() + rhs.unpack());
 }
 
-RInt64 add(JB::IlBuilder* b, RInt64 lhs, RInt64 rhs) {
+inline RInt64 add(JB::IlBuilder* b, RInt64 lhs, RInt64 rhs) {
 	return RInt64::pack(b->Add(lhs.unpack(), rhs.unpack()));
 }
 

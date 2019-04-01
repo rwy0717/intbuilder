@@ -13,6 +13,8 @@ include(OmrPlatform)
 
 omr_platform_global_setup()
 
+enable_testing()
+
 # OMR Configuration
 
 set(OMR_COMPILER   ON  CACHE INTERNAL "Enable the Compiler. Needed for JitBuilder")
@@ -28,7 +30,7 @@ set(OMR_THREAD     OFF CACHE INTERNAL "Disable thread library")
 
 set(OMR_WARNINGS_AS_ERRORS OFF CACHE INTERNAL "OMR doesn't compile cleanly on my laptop :p")
 
-add_subdirectory(omr) # must be first
+add_subdirectory(googletest)
+add_subdirectory(omr)
 add_subdirectory(intbuilder)
 add_subdirectory(example)
-
