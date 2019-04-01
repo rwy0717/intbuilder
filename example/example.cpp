@@ -154,7 +154,7 @@ struct GenNop {
 		// b->Goto(b->End());
 		b->AppendBuilder(e);
 
-		// next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
+		next(b, machine, OMR::Model::Size<M>(b, INSTR_SIZE));
 		return true;
 	}
 };
@@ -299,12 +299,12 @@ public:
 		JitTypes::define(&_typedict);
 		set(Op::UNKNOWN,    GenError<M>());
 		set(Op::NOP,        GenNop<M>());
-		// set(Op::HALT,       GenHalt<M>());
-		// set(Op::PUSH_CONST, GenPushConst<M>());
-		// set(Op::ADD,        GenAdd<M>());
-		// set(Op::PUSH_LOCAL, GenPushLocal<M>());
-		// set(Op::POP_LOCAL,  GenPopLocal<M>());
-		// set(Op::BRANCH_IF,  GenBranchIf<M>());
+		set(Op::HALT,       GenHalt<M>());
+		set(Op::PUSH_CONST, GenPushConst<M>());
+		set(Op::ADD,        GenAdd<M>());
+		set(Op::PUSH_LOCAL, GenPushLocal<M>());
+		set(Op::POP_LOCAL,  GenPopLocal<M>());
+		set(Op::BRANCH_IF,  GenBranchIf<M>());
 
 		_handlers.setDefault(GenDefault<M>());
 	}
@@ -596,7 +596,7 @@ Func* MakeBranchIfTrueFunction() {
 
 extern "C" int main(int argc, char** argv) {
 	initializeJit();
-	Func* target = MakeTwoNopsThenHaltFunction();
+	Func* target = MakeBranchIfTrueFunction();
 	Interpreter interpreter;
 
 	fprintf(stderr, "@@@ int main: interpreter=%p\n", &interpreter);
